@@ -14,6 +14,6 @@ or
 ## How to use
 All you have to do is require `kinvey`:
 
-	var Kinvey = require('Kinvey');
+	var Kinvey = require('kinvey');
 
 Now, you have access to all services the library provides. Please read the [JavaScript Developer’s Guide](https://console.kinvey.com/#docs/JavaScript/JS-Developers-Guide) for more information.
