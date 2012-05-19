@@ -78,19 +78,35 @@
     };
   };
 
+  // Utilities.
+  var fs = require('fs');
+  var filename = __dirname + '/.kinvey';
+
+  // Load cache.
+  var cache = {};// container.
+  try {
+    cache = JSON.parse(fs.readFileSync(filename, 'utf8'));
+  }
+  catch(_) {
+    // Will fail when file does not exist, or is malformed.
+  }
+
   // Define the Storage class.
-  // For the time being, this class does not implement any "real" storage.
-  var cache = {};
   var Storage = {
     get: function(key) {
-      var value = cache[key];
-      return value ? JSON.parse(value) : null;
+      return cache[key] || null;
     },
     set: function(key, value) {
-      cache[key] = JSON.stringify(value);
+      cache[key] = value.toJSON();
+
+      // Update file cache.
+      fs.writeFileSync(filename, JSON.stringify(cache), 'utf8');
     },
     remove: function(key) {
       delete cache[key];
+
+      // Update file cache.
+      fs.writeFileSync(filename, JSON.stringify(cache), 'utf8');
     }
   };
 
@@ -109,7 +125,7 @@
    * 
    * @constant
    */
-  Kinvey.SDK_VERSION = '0.9.1';
+  Kinvey.SDK_VERSION = '0.9.2';
 
   /**
    * Returns current user, or null if not set.
@@ -121,7 +137,8 @@
   };
 
   /**
-   * Initializes library for use with Kinvey services.
+   * Initializes library for use with Kinvey services. Never use the master
+   * secret in client-side code.
    * 
    * @example <code>
    * Kinvey.init({
@@ -131,11 +148,11 @@
    * </code>
    * 
    * @param {Object} options Kinvey credentials. Object expects properties:
-   *          "appKey", "appSecret".
+   *          "appKey", and "appSecret" or "masterSecret".
    * @throws {Error}
    *           <ul>
    *           <li>On empty appKey,</li>
-   *           <li>On empty appSecret.</li>
+   *           <li>On empty appSecret and masterSecret.</li>
    *           </ul>
    */
   Kinvey.init = function(options) {
@@ -143,13 +160,17 @@
     if(null == options.appKey) {
       throw new Error('appKey must be defined');
     }
-    if(null == options.appSecret) {
-      throw new Error('appSecret must be defined');
+    if(null == options.appSecret && null == options.masterSecret) {
+      throw new Error('appSecret or masterSecret must be defined');
     }
 
     // Store credentials.
     Kinvey.appKey = options.appKey;
-    Kinvey.appSecret = options.appSecret;
+    Kinvey.appSecret = options.appSecret || null;
+    Kinvey.masterSecret = options.masterSecret || null;
+
+    // Restore current user.
+    Kinvey.User._restore();
   };
 
   /**
@@ -161,7 +182,7 @@
    *     console.log('Ping successful', response.kinvey, response.version);
    *   },
    *   error: function(error) {
-   *     console.log('Ping failed', error.error);
+   *     console.log('Ping failed', error.message);
    *   }
    * });
    * </code>
@@ -269,7 +290,7 @@
     }
   };
 
-  /*globals btoa, XMLHttpRequest*/
+  /*globals btoa, navigator, XMLHttpRequest*/
 
   // Define the Kinvey.Net.Http network adapter.
   Kinvey.Net.Http = Base.extend({
@@ -296,9 +317,11 @@
 
     // Properties.
     data: null,
-    headers: {
-      Accept: 'application/json, text/javascript',
-      'Content-Type': 'application/json; charset=utf-8'
+    headers: function() {
+      return {
+        Accept: 'application/json, text/javascript',
+        'Content-Type': 'application/json; charset=utf-8'
+      };
     },
     operation: Kinvey.Net.READ,
     query: null,
@@ -355,8 +378,9 @@
       options.success || (options.success = function() { });
       options.error || (options.error = function() { });
 
-      // A current user is required for all but the User API.
-      if(null === Kinvey.getCurrentUser() && Kinvey.Net.USER_API !== this.api) {
+      // A current user is required for all but the User API, unless the master
+      // secret is specified.
+      if(null === Kinvey.getCurrentUser() && Kinvey.Net.USER_API !== this.api && null === Kinvey.masterSecret) {
         Kinvey.User.init({
           success: bind(this, function() {
             this._process(options);
@@ -427,11 +451,47 @@
      * @return {string} Authorization value.
      */
     _getAuth: function() {
+      // Use master secret if specified.
+      if(null !== Kinvey.masterSecret) {
+        return Kinvey.appKey + ':' + Kinvey.masterSecret;
+      }
+
+      // Use user credentials if specified, use app secret as last resort.
       var currentUser = Kinvey.getCurrentUser();
       if(null !== currentUser) {
         return currentUser.getUsername() + ':' + currentUser.getPassword();
       }
       return Kinvey.appKey + ':' + Kinvey.appSecret;
+    },
+
+    /**
+     * Returns device information.
+     * 
+     * @private
+     * @return {string} Device information
+     */
+    _getDeviceInfo: function() {
+      // Try the most common browsers, fall back to navigator.appName otherwise.
+      var ua = navigator.userAgent.toLowerCase();
+
+      var rChrome = /(chrome)\/([\w]+)/;
+      var rSafari = /(safari)\/([\w.]+)/;
+      var rFirefox = /(firefox)\/([\w.]+)/;
+      var rOpera = /(opera)(?:.*version)?[ \/]([\w.]+)/;
+      var rIE = /(msie) ([\w.]+)/i;
+
+      var browser = rChrome.exec(ua) || rSafari.exec(ua) || rFirefox.exec(ua) || rOpera.exec(ua) || rIE.exec(ua) || [ ];
+
+      // Build device information.
+      // Example: "linux chrome 18 0".
+      return [
+        navigator.platform,
+        browser[1] || navigator.appName,
+        browser[2] || 0,
+        0 // always set device ID to 0.
+      ].map(function(value) {
+        return value.toString().toLowerCase().replace(' ', '_');
+      }).join(' ');
     },
 
     /**
@@ -492,14 +552,15 @@
       try {
         body = JSON.parse(body);
       }
-      catch(_) {
-      }
+      catch(_) { }
 
       // Fire callback.
       if((200 <= statusCode && 300 > statusCode) || 304 === statusCode) {
         options.success(body);
       }
       else {
+        // Copy error message to message attribute as a convenience.
+        body.error && (body.message = body.error);
         options.error(body);
       }
     },
@@ -522,17 +583,20 @@
       request.open(this.METHOD[this.operation], this._getUrl(), true);
 
       // Add headers.
-      for( var header in this.headers) {
-        request.setRequestHeader(header, this.headers[header]);
+      var headers = this.headers();
+      headers.Authorization = 'Basic ' + btoa(this._getAuth());
+      headers['X-Kinvey-Device-Information'] = this._getDeviceInfo();
+      for( var header in headers) {
+        request.setRequestHeader(header, headers[header]);
       }
-      request.setRequestHeader('Authorization', 'Basic ' + btoa(this._getAuth()));
 
       // Handle response.
       var self = this;
       request.onerror = function() {
         // Unfortunately, no error message is provided by XHR.
         options.error({
-          error: 'Error'
+          error: 'Unknown error',
+          message: 'Unknown error'
         });
       };
       request.onload = function() {
@@ -574,6 +638,24 @@
     /** @lends Kinvey.Net.Node# */
 
     /**
+     * Returns device information.
+     * 
+     * @private
+     * @return {string} Device information
+     */
+    _getDeviceInfo: function() {
+      // Example: "linux node v0.6.13 0".
+      return [
+        process.platform,
+        process.title,
+        process.version,
+        0// always set device ID to 0.
+      ].map(function(value) {
+        return value.toString().toLowerCase().replace(' ', '_');
+      }).join(' ');
+    },
+
+    /**
      * @override
      * @private
      * @see Kinvey.Net.Http#_process
@@ -582,14 +664,23 @@
       // Split URL in parts.
       var parts = url.parse(this._getUrl());
 
+      // Build body.
+      var data = this.data ? JSON.stringify(this.data) : '';
+
+      // Build headers.
+      // Authorization header is set explicitly to support node 0.4.X.
+      var headers = this.headers();
+      headers.Authorization = 'Basic ' + new Buffer(this._getAuth(), 'utf8').toString('base64');
+      headers['X-Kinvey-Device-Information'] = this._getDeviceInfo();
+      headers['Content-Length'] = data.length;
+
       // Build request.
       var self = this;
       var request = https.request({
         host: parts.host,
-        path: parts.path,
+        path: parts.pathname + (parts.search ? parts.search : ''),
         method: this.METHOD[this.operation],
-        headers: this.headers,
-        auth: this._getAuth()
+        headers: headers
       }, function(response) {
         // Capture data stream.
         var body = '';
@@ -598,14 +689,17 @@
         });
 
         // Handle response when it completes.
-        response.on('end', function() {
+        // @link https://github.com/joyent/node/issues/728
+        var onComplete = function() {
           self._handleResponse(response.statusCode, body, options);
-        });
+        };
+        response.on('close', onComplete);
+        response.on('end', onComplete);
       });
       request.on('error', function(error) {// failed to fire request.
-        options.error({ error: error.code });
+        options.error({ error: error.code, message: error.code });
       });
-      this.data && request.write(JSON.stringify(this.data));// pass body.
+      data && request.write(data);// pass body.
       request.end();// fire request.
     }
   });
@@ -840,6 +934,26 @@
     /** @lends Kinvey.Collection# */
 
     /**
+     * Aggregates entities in collection.
+     * 
+     * @param {Kinvey.Aggregation} aggregation Aggregation object.
+     * @param {Object} [options] Options.
+     * @param {function(list)} [options.success] Success callback.
+     * @param {function(error)} [options.error] Failure callback.
+     */
+    aggregate: function(aggregation, options) {
+      if(!(aggregation instanceof Kinvey.Aggregation)) {
+        throw new Error('Aggregation must be an instanceof Kinvey.Aggregation');
+      }
+      aggregation.setQuery(this.query);// respect collection query.
+
+      var net = Kinvey.Net.factory(this.API, this.name, '_group');
+      net.setData(aggregation);
+      net.setOperation(Kinvey.Net.CREATE);
+      net.send(options);
+    },
+
+    /**
      * Clears collection. This method is NOT atomic, it stops on first failure.
      * 
      * @param {Object} [options]
@@ -848,7 +962,6 @@
      */
     clear: function(options) {
       options || (options = {});
-      this.list = [ ];// clear list
 
       // Retrieve all entities, and remove them one by one.
       this.fetch({
@@ -884,7 +997,7 @@
      *    console.log('Number of entities: ' + i);
      *   },
      *   error: function(error) {
-     *     console.log('Count failed', error.error);
+     *     console.log('Count failed', error.message);
      *   }
      * });
      * </code>
@@ -993,8 +1106,10 @@
     destroy: function(options) {
       options || (options = {});
       if(!this.isLoggedIn) {
+        var message = 'This request requires the master secret';
         options.error && options.error({
-          error: 'This request requires the master secret'
+          error: message,
+          message: message
         });
         return;
       }
@@ -1098,8 +1213,10 @@
     save: function(options) {
       options || (options = {});
       if(!this.isLoggedIn) {
+        var message = 'This request requires the master secret';
         options.error && options.error({
-          error: 'This request requires the master secret'
+          error: message,
+          message: message
         });
         return;
       }
@@ -1186,7 +1303,7 @@
      *     console.log('User created', user);
      *   },
      *   error: function(error) {
-     *     console.log('User not created', error.error);
+     *     console.log('User not created', error.message);
      *   }
      * });
      * </code>
@@ -1219,8 +1336,8 @@
     },
 
     /**
-     * Initializes a current user. Restores the user from cache, or creates an
-     * anonymous user. This method is called internally when doing a network
+     * Initializes a current user. Returns the current user, otherwise creates
+     * an anonymous user. This method is called internally when doing a network
      * request. Manually invoking this function is however allowed.
      * 
      * @param {Object} [options]
@@ -1231,31 +1348,34 @@
     init: function(options) {
       options || (options = {});
 
-      // First, check whether there already is a current user.
+      // Check whether there already is a current user.
       var user = Kinvey.getCurrentUser();
       if(null !== user) {
         options.success && options.success(user);
         return user;
       }
 
-      // Second, check if user attributes are stored locally on the device.
-      var attr = Storage.get(CACHE_TAG());
-      if(null !== attr && null != attr.username && null != attr.password) {
-        // Extend the error callback, so local data can be destroyed if stale.
-        var original = options.error;
-        options.error = function(error) {
-          Storage.remove(CACHE_TAG());
-          original && original(error);
-        };
+      // No cached user available, create anonymous user.
+      return Kinvey.User.create({}, options);
+    },
 
-        // Re-authenticate user to ensure it is not stale.
-        user = new Kinvey.User();
-        user.login(attr.username, attr.password, options);
-        return user;
+    /**
+     * Restores user stored locally on the device. This method is called by
+     * Kinvey.init(), and should not be called anywhere else.
+     * 
+     * @private
+     */
+    _restore: function() {
+      // Return if there already is a current user. Safety check.
+      if(null !== Kinvey.getCurrentUser()) {
+        return;
       }
 
-      // No cached user available either, create anonymous user.
-      return Kinvey.User.create({}, options);
+      // Retrieve and restore user from storage.
+      var attr = Storage.get(CACHE_TAG());
+      if(null !== attr && null != attr.username && null != attr.password) {
+        new Kinvey.User(attr)._login();
+      }
     }
   });
 
@@ -1293,8 +1413,10 @@
      * @override
      */
     clear: function(options) {
+      var message = 'This request requires the master secret';
       options && options.error && options.error({
-        error: 'This request requires the master secret'
+        error: message,
+        message: message
       });
     }
   });
@@ -2171,6 +2293,200 @@
       for(var operator in expression) {
         this.query[field][operator] = expression[operator];
       }
+    }
+  });
+
+  // Define the Kinvey Aggregation class.
+  Kinvey.Aggregation = Base.extend({
+    /**
+     * Creates a new aggregation.
+     * 
+     * @example <code>
+     * var aggregation = new Kinvey.Aggregation();
+     * </code>
+     * 
+     * @name Kinvey.Aggregation
+     * @constructor
+     * @param {Object} [builder] One of Kinvey.Aggregation.* builders.
+     */
+    constructor: function(builder) {
+      this.builder = builder || Kinvey.Aggregation.factory();
+    },
+
+    /** @lends Kinvey.Aggregation# */
+
+    /**
+     * Adds key under condition.
+     * 
+     * @param {string} key Key under condition.
+     * @return {Kinvey.Aggregation} Current instance.
+     */
+    on: function(key) {
+      this.builder.on(key);
+      return this;
+    },
+
+    /**
+     * Sets the finalize function. Currently not supported.
+     * 
+     * @param {function(counter)} fn Finalize function.
+     * @return {Kinvey.Aggregation} Current instance.
+     */
+    setFinalize: function(fn) {
+      this.builder.setFinalize(fn);
+    },
+
+    /**
+     * Sets the initial counter object.
+     * 
+     * @param {Object} counter Counter object.
+     * @return {Kinvey.Aggregation} Current instance.
+     */
+    setInitial: function(counter) {
+      this.builder.setInitial(counter);
+      return this;
+    },
+
+    /**
+     * Sets query.
+     * 
+     * @param {Kinvey.Query} [query] query.
+     * @throws {Error} On invalid instance.
+     * @return {Kinvey.Aggregation} Current instance.
+     */
+    setQuery: function(query) {
+      if(query && !(query instanceof Kinvey.Query)) {
+        throw new Error('Query must be an instanceof Kinvey.Query');
+      }
+      this.builder.setQuery(query);
+      return this;
+    },
+
+    /**
+     * Sets the reduce function.
+     * 
+     * @param {function(doc, counter)} fn Reduce function.
+     * @return {Kinvey.Aggregation} Current instance.
+     */
+    setReduce: function(fn) {
+      this.builder.setReduce(fn);
+      return this;
+    },
+
+    /**
+     * Returns JSON representation.
+     * 
+     * @return {Object} JSON representation.
+     */
+    toJSON: function() {
+      return this.builder.toJSON();
+    }
+  }, {
+    /** @lends Kinvey.Aggregation */
+
+    /**
+     * Returns an aggregation builder.
+     * 
+     * @return {Object} One of Kinvey.Aggregation.* builders.
+     */
+    factory: function() {
+      // Currently, only the Mongo builder is supported.
+      return new Kinvey.Aggregation.MongoBuilder();
+    }
+  });
+
+  // Define the Kinvey Aggregation MongoBuilder class.
+  Kinvey.Aggregation.MongoBuilder = Base.extend({
+    // Fields.
+    finalize: null,
+    initial: { count: 0 },
+    keys: null,
+    reduce: function(doc, out) {
+      out.count++;
+    },
+    query: null,
+
+    /**
+     * Creates a new MongoDB aggregation builder.
+     * 
+     * @name Kinvey.Aggregation.MongoBuilder
+     * @constructor
+     */
+    constructor: function() {
+      // Set keys property explicitly on this instance, otherwise the prototype
+      // will be overloaded.
+      this.keys = {};
+    },
+
+    /** @lends Kinvey.Aggregation.MongoBuilder# */
+
+    /**
+     * Adds key under condition.
+     * 
+     * @param {string} key Key under condition.
+     * @return {Kinvey.Aggregation} Current instance.
+     */
+    on: function(key) {
+      this.keys[key] = true;
+    },
+
+    /**
+     * Sets the finalize function.
+     * 
+     * @param {function(counter)} fn Finalize function.
+     */
+    setFinalize: function(fn) {
+      this.finalize = fn;
+    },
+
+    /**
+     * Sets the initial counter object.
+     * 
+     * @param {Object} counter Counter object.
+     */
+    setInitial: function(counter) {
+      this.initial = counter;
+    },
+
+    /**
+     * Sets query.
+     * 
+     * @param {Kinvey.Query} [query] query.
+     */
+    setQuery: function(query) {
+      this.query = query;
+      return this;
+    },
+
+    /**
+     * Sets the reduce function.
+     * 
+     * @param {function(doc, out)} fn Reduce function.
+     */
+    setReduce: function(fn) {
+      this.reduce = fn;
+    },
+
+    /**
+     * Returns JSON representation.
+     * 
+     * @return {Object} JSON representation.
+     */
+    toJSON: function() {
+      // Required fields.
+      var result = {
+        initial: this.initial,
+        key: this.keys,
+        reduce: this.reduce.toString()
+      };
+
+      // Optional fields.
+      this.finalize && (result.finalize = this.finalize.toString());
+
+      var query = this.query && this.query.toJSON().query;
+      query && (result.condition = query);
+
+      return result;
     }
   });
 
