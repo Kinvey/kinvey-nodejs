@@ -125,7 +125,7 @@
    * 
    * @constant
    */
-  Kinvey.SDK_VERSION = '0.9.2';
+  Kinvey.SDK_VERSION = '0.9.3';
 
   /**
    * Returns current user, or null if not set.
@@ -290,7 +290,7 @@
     }
   };
 
-  /*globals btoa, navigator, XMLHttpRequest*/
+  /*globals btoa, navigator, XMLHttpRequest, window*/
 
   // Define the Kinvey.Net.Http network adapter.
   Kinvey.Net.Http = Base.extend({
@@ -521,20 +521,22 @@
       }
 
       // Build query string.
+      var param = [ ];
       if(null != this.query) {
-        var param = [ ];
-
         // Fill param with all query string parameters.
         var parts = this.query.toJSON();
         parts.limit && param.push('limit=' + this._encode(parts.limit));
         parts.skip && param.push('skip=' + this._encode(parts.skip));
         parts.sort && param.push('sort=' + this._encode(parts.sort));
-        parts.query && param.push('query=' + this._encode(parts.query));
-
-        // Append parts to URL.
-        url += '?' + param.join('&');
+        param.push('query=' + (parts.query ? this._encode(parts.query) : '{}'));
       }
-      return url;
+      else if(Kinvey.Net.READ === this.operation) {
+        param.push('query={}');
+      }
+      param.push('_=' + new Date().getTime());
+
+      // Join parts.
+      return url + (param.length ? '?' + param.join('&') : '');
     },
 
     /**
@@ -586,7 +588,15 @@
       var headers = this.headers();
       headers.Authorization = 'Basic ' + btoa(this._getAuth());
       headers['X-Kinvey-Device-Information'] = this._getDeviceInfo();
-      for( var header in headers) {
+
+      // Compatibility with Android 2.3.3.
+      // @link http://stackoverflow.com/questions/9146491/ajax-get-request-with-authorization-header-and-cors-on-android-2-3-3
+      if(window && window.location && Kinvey.Net.READ === this.operation) {
+        // Set origin header manually.
+        var origin = window.location.protocol + '//' + window.location.host;
+        headers['X-Kinvey-Origin'] = origin;
+      }
+      for(var header in headers) {
         request.setRequestHeader(header, headers[header]);
       }
 
@@ -954,37 +964,17 @@
     },
 
     /**
-     * Clears collection. This method is NOT atomic, it stops on first failure.
+     * Clears collection.
      * 
      * @param {Object} [options]
      * @param {function()} [success] Success callback.
      * @param {function(error)} [error] Failure callback.
      */
     clear: function(options) {
-      options || (options = {});
-
-      // Retrieve all entities, and remove them one by one.
-      this.fetch({
-        success: bind(this, function() {
-          var iterator = bind(this, function() {
-            var entity = this.list[0];
-            if(entity) {
-              entity.destroy({
-                success: bind(this, function() {
-                  this.list.shift();
-                  iterator();
-                }),
-                error: options.error
-              });
-            }
-            else {
-              options.success && options.success();
-            }
-          });
-          iterator();
-        }),
-        error: options.error
-      });
+      var net = Kinvey.Net.factory(this.API, this.name);
+      net.setOperation(Kinvey.Net.DELETE);
+      this.query ? net.setQuery(this.query) : net.setQuery(new Kinvey.Query());
+      net.send(options);
     },
 
     /**
@@ -1296,7 +1286,7 @@
      * Creates the current user.
      * 
      * @example <code>
-     * Kinvey.create({
+     * Kinvey.User.create({
      *   username: 'username'
      * }, {
      *   success: function(user) {
@@ -2329,7 +2319,7 @@
     /**
      * Sets the finalize function. Currently not supported.
      * 
-     * @param {function(counter)} fn Finalize function.
+     * @param {function(doc, counter)} fn Finalize function.
      * @return {Kinvey.Aggregation} Current instance.
      */
     setFinalize: function(fn) {
@@ -2482,7 +2472,6 @@
 
       // Optional fields.
       this.finalize && (result.finalize = this.finalize.toString());
-
       var query = this.query && this.query.toJSON().query;
       query && (result.condition = query);
 
