@@ -75,6 +75,6 @@ bookCollection.fetch({
 ## What’s next?
 The example shown above only shows a very small subset of all features the library offers. To learn more:
 
-* Read about our APIs in the [JavaScript Developer’s Guide](https://console.kinvey.com/#docs/JavaScript/JS-Developers-Guide)
-* Try saving and loading data using the [JavaScript Appdata API](https://console.kinvey.com/#docs/JavaScript/JS-Developers-Guide#appdata)
-* Consult the [JavaScript API Docs](https://console.kinvey.com/#docs/JavaScript/JS-API-Docs) for detailed information on all available methods
+* Read about our APIs in the [JavaScript Developer’s Guide](http://docs.kinvey.com/js-developers-guide.html)
+* Try saving and loading data using the [JavaScript Appdata API](http://docs.kinvey.com/js-developers-guide.html#appdata)
+* Consult the [JavaScript API Docs](http://docs.kinvey.com/js-api-reference.html) for detailed information on all available methods
