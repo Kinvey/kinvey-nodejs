@@ -125,7 +125,7 @@
    * 
    * @constant
    */
-  Kinvey.SDK_VERSION = '0.9.3';
+  Kinvey.SDK_VERSION = '0.9.4';
 
   /**
    * Returns current user, or null if not set.
@@ -726,19 +726,17 @@
      * Creates a new entity.
      * 
      * @example <code>
-     * var entity = new Kinvey.Entity('my-collection');
-     * var entity = new Kinvey.Entity('my-collection', {
-     *   key: 'value'
-     * });
+     * var entity = new Kinvey.Entity({}, 'my-collection');
+     * var entity = new Kinvey.Entity({ key: 'value' }, 'my-collection');
      * </code>
      * 
      * @name Kinvey.Entity
      * @constructor
+     * @param {Object} attr Attribute object.
      * @param {string} collection Owner collection.
-     * @param {Object} [attr] Attribute object.
      * @throws {Error} On empty collection.
      */
-    constructor: function(collection, attr) {
+    constructor: function(attr, collection) {
       if(null == collection) {
         throw new Error('Collection must not be null');
       }
@@ -1028,7 +1026,7 @@
       net.send({
         success: bind(this, function(response) {
           response.forEach(bind(this, function(attr) {
-            this.list.push(new this.entity(this.name, attr));
+            this.list.push(new this.entity(attr, this.name));
           }));
           options.success && options.success(this.list);
         }),
@@ -1069,9 +1067,7 @@
      * 
      * @example <code>
      * var user = new Kinvey.User();
-     * var user = new Kinvey.User({
-     *   key: 'value'
-     * });
+     * var user = new Kinvey.User({ key: 'value' });
      * </code>
      * 
      * @name Kinvey.User
@@ -1082,7 +1078,7 @@
     constructor: function(attr) {
       // Users reside in a distinct API, without the notion of collections.
       // Therefore, an empty string is passed to the parent constructor.
-      Kinvey.Entity.prototype.constructor.call(this, '', attr);
+      Kinvey.Entity.prototype.constructor.call(this, attr, '');
     },
 
     /** @lends Kinvey.User# */

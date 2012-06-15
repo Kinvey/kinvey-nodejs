@@ -39,10 +39,10 @@ Kinvey.init({
 As a first example, we will show you how to save an item on Kinvey. The following code snippet saves a book. We use the first parameter of `Kinvey.Entity` to specify in which collection we want to save this book.
 
 ```js
-var book = new Kinvey.Entity('book', {
+var book = new Kinvey.Entity({
   title: 'Awesome Arms',
   author: 'Robert Kennedy'
-});
+}, 'book');
 book.save({
   success: function(response) {
     // response is the book object.
