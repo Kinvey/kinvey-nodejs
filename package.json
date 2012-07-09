@@ -2,7 +2,7 @@
   "author": "Kinvey, Inc <support@kinvey.com> (http://www.kinvey.com)",
   "name": "kinvey",
   "description": "Kinvey JavaScript Library for Node.js.",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "homepage": "http://www.kinvey.com",
   "bugs": {
     "email": "support@kinvey.com"

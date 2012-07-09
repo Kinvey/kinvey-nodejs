@@ -48,7 +48,7 @@ book.save({
     // response is the book object.
   },
   error: function(error) {
-    // error contains a message field indicating what exactly went wrong.
+    // error contains a error and description field indicating what exactly went wrong.
   }
 });
 ```
@@ -67,7 +67,7 @@ bookCollection.fetch({
     // list is an array of books written by Kennedy.
   },
   error: function(error) {
-    // error contains a message field indicating what exactly went wrong.
+    // error contains a error and description field indicating what exactly went wrong.
   }
 });
 ```

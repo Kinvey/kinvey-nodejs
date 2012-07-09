@@ -97,9 +97,7 @@
       return cache[key] || null;
     },
     set: function(key, value) {
-      cache[key] = value.toJSON();
-
-      // Update file cache.
+      cache[key] = value;
       fs.writeFileSync(filename, JSON.stringify(cache), 'utf8');
     },
     remove: function(key) {
@@ -118,14 +116,14 @@
    * 
    * @constant
    */
-  Kinvey.API_VERSION = 0;
+  Kinvey.API_VERSION = 1;
 
   /**
    * SDK version.
    * 
    * @constant
    */
-  Kinvey.SDK_VERSION = '0.9.4';
+  Kinvey.SDK_VERSION = '0.9.5';
 
   /**
    * Returns current user, or null if not set.
@@ -206,6 +204,284 @@
     currentUser = user;
   };
 
+  // Define the Kinvey Metadata class.
+  Kinvey.Metadata = Base.extend({
+    /**
+     * Creates a new metadata instance.
+     * 
+     * @name Kinvey.Metadata
+     * @constructor
+     * @param {Object} [attr] Attributes containing metadata.
+     */
+    constructor: function(attr) {
+      attr || (attr = {});
+      this.acl = attr._acl || {};
+      this.kmd = attr._kmd || {};
+    },
+
+    /** @lends Kinvey.Metadata# */
+
+    /**
+     * Adds item read permissions for user.
+     * 
+     * @param {string} user User id.
+     */
+    addReader: function(user) {
+      this.acl.r || (this.acl.r = []);
+      if(-1 === this.acl.r.indexOf(user)) {
+        this.acl.r.push(user);
+      }
+    },
+
+    /**
+     * Adds item write permissions for user.
+     * 
+     * @param {string} user User id.
+     */
+    addWriter: function(user) {
+      this.acl.w || (this.acl.w = []);
+      if(-1 === this.acl.w.indexOf(user)) {
+        this.acl.w.push(user);
+      }
+    },
+
+    /**
+     * Returns all readers.
+     * 
+     * @return {Array} List of readers.
+     */
+    getReaders: function() {
+      return this.acl.r || [];
+    },
+
+    /**
+     * Returns all writers.
+     * 
+     * @return {Array} List of writers.
+     */
+    getWriters: function() {
+      return this.acl.w || [];
+    },
+
+    /**
+     * Returns whether the current user owns the item. This method
+     * is only useful when the class is created with a predefined
+     * ACL.
+     * 
+     * @returns {Boolean}
+     */
+    isOwner: function() {
+      var owner = this.acl.creator;
+      var currentUser = Kinvey.getCurrentUser();
+
+      if(owner && currentUser) {
+        return owner === currentUser.getId();
+      }
+      return false;
+    },
+
+    /**
+     * Returns last modified date, or null if not set.
+     * 
+     * @return {string} ISO-8601 formatted date.
+     */
+    lastModified: function() {
+      return this.kmd.lmt || null;
+    },
+
+    /**
+     * Returns whether the current user has write permissions.
+     * 
+     * @returns {Boolean}
+     */
+    hasWritePermissions: function() {
+      if(this.isOwner() || this.isGloballyWritable()) {
+        return true;
+      }
+
+      var currentUser = Kinvey.getCurrentUser();
+      if(currentUser && this.acl.w) {
+        return -1 !== this.acl.w.indexOf(currentUser.getId());
+      }
+      return false;
+    },
+
+    /**
+     * Returns whether the item is globally readable.
+     * 
+     * @returns {Boolean}
+     */
+    isGloballyReadable: function() {
+      return !!this.acl.gr;
+    },
+
+    /**
+     * Returns whether the item is globally writable.
+     * 
+     * @returns {Boolean}
+     */
+    isGloballyWritable: function() {
+      return !!this.acl.gw;
+    },
+
+    /**
+     * Removes item read permissions for user.
+     * 
+     * @param {string} user User id.
+     */
+    removeReader: function(user) {
+      if(this.acl.r) {
+        var index = this.acl.r.indexOf(user);
+        if(-1 !== index) {
+          this.acl.r.splice(index, 1);
+        }
+      }
+    },
+
+    /**
+     * Removes item write permissions for user.
+     * 
+     * @param {string} user User id.
+     */
+    removeWriter: function(user) {
+      if(this.acl.w) {
+        var index = this.acl.w.indexOf(user);
+        if(-1 !== index) {
+          this.acl.w.splice(index, 1);
+        }
+      }
+    },
+
+    /**
+     * Sets whether the item is globally readable.
+     * 
+     * @param {Boolean} flag
+     */
+    setGloballyReadable: function(flag) {
+      this.acl.gr = !!flag;
+    },
+
+    /**
+     * Sets whether the item is globally writable.
+     * 
+     * @param {Boolean} flag
+     */
+    setGloballyWritable: function(flag) {
+      this.acl.gw = !!flag;
+    },
+
+    /**
+     * Returns JSON representation. Used by JSON#stringify.
+     * 
+     * @returns {object} JSON representation.
+     */
+    toJSON: function() {
+      return {
+        _acl: this.acl,
+        _kmd: this.kmd
+      };
+    }
+  });
+
+  /**
+   * Kinvey Error namespace definition. Holds all possible errors.
+   * 
+   * @namespace
+   */
+  Kinvey.Error = {
+    // Client-side.
+    /** @constant */
+    OPERATION_DENIED: 'OperationDenied',
+
+    /** @constant */
+    REQUEST_FAILED: 'RequestFailed',
+
+    /** @constant */
+    RESPONSE_PROBLEM: 'ResponseProblem',
+
+    // Server-side.
+    /** @constant */
+    ENTITY_NOT_FOUND: 'EntityNotFound',
+
+    /** @constant */
+    COLLECTION_NOT_FOUND: 'CollectionNotFound',
+
+    /** @constant */
+    APP_NOT_FOUND: 'AppNotFound',
+
+    /** @constant */
+    USER_NOT_FOUND: 'UserNotFound',
+
+    /** @constant */
+    BLOB_NOT_FOUND: 'BlobNotFound',
+
+    /** @constant */
+    INVALID_CREDENTIALS: 'InvalidCredentials',
+
+    /** @constant */
+    KINVEY_INTERNAL_ERROR_RETRY: 'KinveyInternalErrorRetry',
+
+    /** @constant */
+    KINVEY_INTERNAL_ERROR_STOP: 'KinveyInternalErrorStop',
+
+    /** @constant */
+    USER_ALREADY_EXISTS: 'UserAlreadyExists',
+
+    /** @constant */
+    DUPLICATE_END_USERS: 'DuplicateEndUsers',
+
+    /** @constant */
+    INSUFFICIENT_CREDENTIALS: 'InsufficientCredentials',
+
+    /** @constant */
+    WRITES_TO_COLLECTION_DISALLOWED: 'WritesToCollectionDisallowed',
+
+    /** @constant */
+    INDIRECT_COLLECTION_ACCESS_DISALLOWED : 'IndirectCollectionAccessDisallowed',
+
+    /** @constant */
+    APP_PROBLEM: 'AppProblem',
+
+    /** @constant */
+    PARAMETER_VALUE_OUT_OF_RANGE: 'ParameterValueOutOfRange',
+
+    /** @constant */
+    CORS_DISABLED: 'CORSDisabled',
+
+    /** @constant */
+    INVALID_QUERY_SYNTAX: 'InvalidQuerySyntax',
+
+    /** @constant */
+    MISSING_QUERY: 'MissingQuery',
+
+    /** @constant */
+    JSON_PARSE_ERROR: 'JSONParseError',
+
+    /** @constant */
+    MISSING_REQUEST_HEADER: 'MissingRequestHeader',
+
+    /** @constant */
+    INCOMPLETE_REQUEST_BODY: 'IncompleteRequestBody',
+
+    /** @constant */
+    MISSING_REQUEST_PARAMETER: 'MissingRequestParameter',
+
+    /** @constant */
+    INVALID_IDENTIFIER: 'InvalidIdentifier',
+
+    /** @constant */
+    BAD_REQUEST: 'BadRequest',
+
+    /** @constant */
+    FEATURE_UNAVAILABLE: 'FeatureUnavailable',
+
+    /** @constant */
+    API_VERSION_NOT_IMPLEMENTED: 'APIVersionNotImplemented',
+
+    /** @constant */
+    API_VERSION_NOT_AVAILABLE: 'APIVersionNotAvailable'
+  };
+
   /**
    * Kinvey Net namespace definition. This namespace provides API and operation
    * constants to allow different network adapters. Network adapters live in
@@ -283,6 +559,9 @@
      * @return {Object} One of Kinvey.Net.* adapters.
      */
     factory: function(api, collection, id) {
+      if('undefined' !== typeof Titanium) {// Titanium
+        return new Kinvey.Net.Titanium(api, collection, id);
+      }
       if('undefined' !== typeof exports) {// node.js
         return new Kinvey.Net.Node(api, collection, id);
       }
@@ -300,7 +579,7 @@
       return {
         BASE: base,
         APPDATA: base + '/appdata',
-        RESOURCE: base + '/resource',
+        RESOURCE: base + '/blob',
         USER: base + '/user'
       };
     }('https://baas.kinvey.com')),
@@ -308,7 +587,7 @@
     // Map CRUD operations to HTTP request methods.
     METHOD: (function(Net) {
       var map = {};
-      var cached = map[Net.CREATE] = 'POST';
+      map[Net.CREATE] = 'POST';
       map[Net.READ] = 'GET';
       map[Net.UPDATE] = 'PUT';
       map[Net.DELETE] = 'DELETE';
@@ -317,12 +596,6 @@
 
     // Properties.
     data: null,
-    headers: function() {
-      return {
-        Accept: 'application/json, text/javascript',
-        'Content-Type': 'application/json; charset=utf-8'
-      };
-    },
     operation: Kinvey.Net.READ,
     query: null,
 
@@ -453,15 +726,15 @@
     _getAuth: function() {
       // Use master secret if specified.
       if(null !== Kinvey.masterSecret) {
-        return Kinvey.appKey + ':' + Kinvey.masterSecret;
+        return 'Basic ' + btoa(Kinvey.appKey + ':' + Kinvey.masterSecret);
       }
 
       // Use user credentials if specified, use app secret as last resort.
       var currentUser = Kinvey.getCurrentUser();
       if(null !== currentUser) {
-        return currentUser.getUsername() + ':' + currentUser.getPassword();
+        return 'Kinvey ' + currentUser.getToken();
       }
-      return Kinvey.appKey + ':' + Kinvey.appSecret;
+      return 'Basic ' + btoa(Kinvey.appKey + ':' + Kinvey.appSecret);
     },
 
     /**
@@ -561,9 +834,12 @@
         options.success(body);
       }
       else {
-        // Copy error message to message attribute as a convenience.
-        body.error && (body.message = body.error);
-        options.error(body);
+        // Construct application-level error object.
+        options.error({
+          code: body.error || Kinvey.Error.RESPONSE_PROBLEM,
+          description: body.description || 'There was a problem handling the response.',
+          debug: body.debug || 'The request was successful, but the response could not be parsed.'
+        });
       }
     },
 
@@ -585,9 +861,13 @@
       request.open(this.METHOD[this.operation], this._getUrl(), true);
 
       // Add headers.
-      var headers = this.headers();
-      headers.Authorization = 'Basic ' + btoa(this._getAuth());
-      headers['X-Kinvey-Device-Information'] = this._getDeviceInfo();
+      var headers = {
+        Accept: 'application/json, text/javascript',
+        Authorization: this._getAuth(),
+        'X-Kinvey-API-Version': Kinvey.API_VERSION,
+        'X-Kinvey-Device-Information': this._getDeviceInfo()
+      };
+      this.data && (headers['Content-Type'] = 'application/json; charset=utf-8');
 
       // Compatibility with Android 2.3.3.
       // @link http://stackoverflow.com/questions/9146491/ajax-get-request-with-authorization-header-and-cors-on-android-2-3-3
@@ -603,10 +883,11 @@
       // Handle response.
       var self = this;
       request.onerror = function() {
-        // Unfortunately, no error message is provided by XHR.
+        // Unfortunately, no error message is provided by XHR. Construct our own.
         options.error({
-          error: 'Unknown error',
-          message: 'Unknown error'
+          code: Kinvey.Error.REQUEST_FAILED,
+          description: 'The request failed. Please retry your request',
+          debug: ''
         });
       };
       request.onload = function() {
@@ -648,6 +929,31 @@
     /** @lends Kinvey.Net.Node# */
 
     /**
+     * Returns plain authorization value.
+     * 
+     * @private
+     * @return {string} Authorization value.
+     */
+    _getAuth: function() {
+      var auth;
+
+      // Use master secret if specified.
+      if(null !== Kinvey.masterSecret) {
+        auth = Kinvey.appKey + ':' + Kinvey.masterSecret;
+        return 'Basic ' + new Buffer(auth, 'utf8').toString('base64');
+      }
+
+      // Use user credentials if specified, use app secret as last resort.
+      var currentUser = Kinvey.getCurrentUser();
+      if(null !== currentUser) {
+        return 'Kinvey ' + currentUser.getToken();
+      }
+
+      auth = Kinvey.appKey + ':' + Kinvey.appSecret;
+      return 'Basic ' + new Buffer(auth, 'utf8').toString('base64');
+    },
+
+    /**
      * Returns device information.
      * 
      * @private
@@ -679,10 +985,15 @@
 
       // Build headers.
       // Authorization header is set explicitly to support node 0.4.X.
-      var headers = this.headers();
-      headers.Authorization = 'Basic ' + new Buffer(this._getAuth(), 'utf8').toString('base64');
-      headers['X-Kinvey-Device-Information'] = this._getDeviceInfo();
-      headers['Content-Length'] = data.length;
+      // Add headers.
+      var headers = {
+        Accept: 'application/json, text/javascript',
+        Authorization: this._getAuth(),
+        'Content-Length': data.length,
+        'X-Kinvey-API-Version': Kinvey.API_VERSION,
+        'X-Kinvey-Device-Information': this._getDeviceInfo()
+      };
+      data && (headers['Content-Type'] = 'application/json; charset=utf-8');
 
       // Build request.
       var self = this;
@@ -707,7 +1018,11 @@
         response.on('end', onComplete);
       });
       request.on('error', function(error) {// failed to fire request.
-        options.error({ error: error.code, message: error.code });
+        options.error({
+          code: Kinvey.Error.REQUEST_FAILED,
+          description: error.message || 'The request failed. Please retry your request',
+          debug: ''
+        });
       });
       data && request.write(data);// pass body.
       request.end();// fire request.
@@ -742,6 +1057,7 @@
       }
       this.attr = attr || {};
       this.collection = collection;
+      this.metadata = null;
     },
 
     /** @lends Kinvey.Entity# */
@@ -800,6 +1116,17 @@
     },
 
     /**
+     * Returns metadata.
+     * 
+     * @return {Kinvey.Metadata} Metadata.
+     */
+    getMetadata: function() {
+      // Lazy load metadata object, and return it.
+      this.metadata || (this.metadata = new Kinvey.Metadata(this.attr));
+      return this.metadata;
+    },
+
+    /**
      * Returns whether entity is persisted.
      * 
      * @return {boolean}
@@ -827,6 +1154,7 @@
       Kinvey.Net.factory(this.API, this.collection, id).send({
         success: bind(this, function(response) {
           this.attr = response;
+          this.metadata = null;// Reset.
           options.success && options.success(this);
         }),
         error: options.error
@@ -846,28 +1174,16 @@
 
       // Retrieve data.
       var net = Kinvey.Net.factory(this.API, this.collection, this.getId());
-      net.setData(this.attr);// include attributes
+      net.setData(this.toJSON());
       net.setOperation(operation);
       net.send({
         success: bind(this, function(response) {
           this.attr = response;
+          this.metadata = null;// Reset.
           options.success && options.success(this);
         }),
         error: options.error
       });
-    },
-
-    /**
-     * Sets id.
-     * 
-     * @param {string} id Id.
-     * @throws {Error} On empty id.
-     */
-    setId: function(id) {
-      if(null == id) {
-        throw new Error('Id must not be null');
-      }
-      this.set(this.ATTR_ID, id);
     },
 
     /**
@@ -885,12 +1201,43 @@
     },
 
     /**
+     * Sets metadata.
+     * 
+     * @param {Kinvey.Metadata} metadata Metadata object.
+     * @throws {Error} On invalid instance.
+     */
+    setMetadata: function(metadata) {
+      if(metadata && !(metadata instanceof Kinvey.Metadata)) {
+        throw new Error('Metadata must be an instanceof Kinvey.Metadata');
+      }
+      this.metadata = metadata || null;
+    },
+
+    /**
+     * Sets id.
+     * 
+     * @param {string} id Id.
+     * @throws {Error} On empty id.
+     */
+    setId: function(id) {
+      if(null == id) {
+        throw new Error('Id must not be null');
+      }
+      this.set(this.ATTR_ID, id);
+    },
+
+    /**
      * Returns JSON representation. Used by JSON#stringify.
      * 
      * @returns {Object} JSON representation.
      */
     toJSON: function() {
-      return this.attr;
+      var result = this.attr;
+
+      // Add ACL metadata.
+      this.metadata && (result._acl = this.metadata.toJSON()._acl);
+
+      return result;
     },
 
     /**
@@ -1062,6 +1409,9 @@
     ATTR_USERNAME: 'username',
     ATTR_PASSWORD: 'password',
 
+    // Authorization token.
+    token: null,
+
     /**
      * Creates a new user.
      * 
@@ -1091,19 +1441,12 @@
      */
     destroy: function(options) {
       options || (options = {});
-      if(!this.isLoggedIn) {
-        var message = 'This request requires the master secret';
-        options.error && options.error({
-          error: message,
-          message: message
-        });
-        return;
-      }
 
-      // Users are allowed to remove themselves.
+      // Destroying the user will automatically invalidate its token, so no
+      // need to logout.
       Kinvey.Entity.prototype.destroy.call(this, {
         success: bind(this, function() {
-          this.logout();
+          this._logout();
           options.success && options.success();
         }),
         error: options.error
@@ -1117,6 +1460,15 @@
      */
     getPassword: function() {
       return this.get(this.ATTR_PASSWORD);
+    },
+
+    /**
+     * Returns token, or null if not set.
+     * 
+     * @return {string} Token.
+     */
+    getToken: function() {
+      return this.token;
     },
 
     /**
@@ -1151,27 +1503,40 @@
      */
     login: function(username, password, options) {
       options || (options = {});
+
       // Make sure only one user is active at the time.
       var currentUser = Kinvey.getCurrentUser();
       if(null !== currentUser) {
-        currentUser.logout();
+        currentUser.logout({
+          success: bind(this, function() {
+            this.login(username, password, options);
+          }),
+          error: options.error
+        });
+        return;
       }
 
-      // Retrieve user.
-      this.setUsername(username);
-      this.setPassword(password);
+      // Retrieve user by its credentials.
+      var data = {};
+      data[this.ATTR_USERNAME] = username;
+      data[this.ATTR_PASSWORD] = password;
 
-      // Send request.
       var net = Kinvey.Net.factory(this.API, this.collection, 'login');
-      net.setData(this.attr);
+      net.setData(data);
       net.setOperation(Kinvey.Net.CREATE);
       net.send({
         success: bind(this, function(response) {
-          // Update attributes. Preserve password since it is part of
-          // the authorization.
+          // Extract token from response.
+          var token = response._kmd.authtoken;
+          delete response._kmd.authtoken;
+
+          // Update attributes. The response does not include the password, but
+          // we don't need it anyway.
           this.attr = response;
-          this.setPassword(password);
-          this._login();
+
+          // Mark this user as logged in.
+          this._login(token);
+
           options.success && options.success(this);
         }),
         error: options.error
@@ -1181,12 +1546,27 @@
     /**
      * Logs out user.
      * 
+     * @param {object} options Options.
+     * @param {function()} [options.success] Success callback.
+     * @param {function(error)} [options.error] Failure callback.
      */
-    logout: function() {
+    logout: function(options) {
+      options || (options = {});
+
       if(this.isLoggedIn) {
-        Kinvey.setCurrentUser(null);
-        this._deleteFromDisk();
-        this.isLoggedIn = false;
+        // Invalidate token.
+        var net = Kinvey.Net.factory(this.API, this.collection, '_logout');
+        net.setOperation(Kinvey.Net.CREATE);
+        net.send({
+          success: bind(this, function() {
+            this._logout();
+            options.success && options.success();
+          }),
+          error: options.error
+        });
+      }
+      else {
+        options.success && options.success();
       }
     },
 
@@ -1199,21 +1579,18 @@
     save: function(options) {
       options || (options = {});
       if(!this.isLoggedIn) {
-        var message = 'This request requires the master secret';
-        options.error && options.error({
-          error: message,
-          message: message
+        options && options.error && options.error({
+          code: Kinvey.Error.OPERATION_DENIED,
+          description: 'This operation is not allowed',
+          debug: 'Cannot save a user which is not logged in.'
         });
         return;
       }
 
-      // Parent method will always update. Response does not include the
-      // password, so persist it manually.
-      var password = this.getPassword();
+      // Parent method will always update
       Kinvey.Entity.prototype.save.call(this, {
         success: bind(this, function() {
-          this.setPassword(password);
-          this._login();
+          this._saveToDisk();// Refresh cache.
           options.success && options.success(this);
         }),
         error: options.error
@@ -1221,8 +1598,9 @@
     },
 
     /**
-     * Sets password.
+     * Sets password. Not implemented.
      * 
+     * @deprecated
      * @param {string} password Password.
      * @throws {Error} On empty password.
      */
@@ -1234,8 +1612,9 @@
     },
 
     /**
-     * Sets username.
+     * Sets username. Not implemented.
      * 
+     * @deprecated
      * @param {string} username Username.
      * @throws {Error} On empty username.
      */
@@ -1259,12 +1638,27 @@
      * Marks user as logged in. This method should never be called standalone,
      * but always involve some network request.
      * 
+     * @param {string} token Token.
      * @private
      */
-    _login: function() {
+    _login: function(token) {
       Kinvey.setCurrentUser(this);
-      this._saveToDisk();
+      this.token = token;
       this.isLoggedIn = true;
+      this._saveToDisk();
+    },
+
+    /**
+     * Destroys login state for user. This method should never be called
+     * standalone.
+     * 
+     * @private
+     */
+    _logout: function() {
+      Kinvey.setCurrentUser(null);
+      this.token = null;
+      this.isLoggedIn = false;
+      this._deleteFromDisk();
     },
 
     /**
@@ -1273,7 +1667,11 @@
      * @private
      */
     _saveToDisk: function() {
-      Storage.set(CACHE_TAG(), this);
+      // Token also needs to be cached.
+      Storage.set(CACHE_TAG(), {
+        token: this.token,
+        user: this.toJSON()
+      });
     }
   }, {
     /** @lends Kinvey.User */
@@ -1306,15 +1704,25 @@
       // Make sure only one user is active at the time.
       var currentUser = Kinvey.getCurrentUser();
       if(null !== currentUser) {
-        currentUser.logout();
+        currentUser.logout({
+          success: function() {
+            Kinvey.User.create(attr, options);
+          },
+          error: options.error
+        });
+        return;
       }
 
-      // Persist, and mark the created user as logged in.
+      // Create a new user.
       var user = new Kinvey.User(attr);
       Kinvey.Entity.prototype.save.call(user, {
         success: bind(user, function() {
-          this._login();
-          options.success && options.success(this);
+          // Unset the password on the user entity, we don't need it any more.
+          var password = this.getPassword();
+          this.unset(this.ATTR_PASSWORD);
+
+          // Login the created user.
+          this.login(this.getUsername(), password, options);
         }),
         error: options.error
       });
@@ -1358,9 +1766,10 @@
       }
 
       // Retrieve and restore user from storage.
-      var attr = Storage.get(CACHE_TAG());
-      if(null !== attr && null != attr.username && null != attr.password) {
-        new Kinvey.User(attr)._login();
+      var data = Storage.get(CACHE_TAG());
+      if(null !== data && null !== data.user && null !== data.token) {
+        // Restore user.
+        new Kinvey.User(data.user)._login(data.token);
       }
     }
   });
@@ -1394,15 +1803,16 @@
     /** @lends Kinvey.UserCollection# */
 
     /**
-     * Clears collection. This action is not allowed.
+     * Clears collection. This action is not allowed, not even by the master
+     * secret.
      * 
      * @override
      */
     clear: function(options) {
-      var message = 'This request requires the master secret';
       options && options.error && options.error({
-        error: message,
-        message: message
+        code: Kinvey.Error.OPERATION_DENIED,
+        description: 'This operation is not allowed',
+        debug: ''
       });
     }
   });
@@ -2384,7 +2794,7 @@
   // Define the Kinvey Aggregation MongoBuilder class.
   Kinvey.Aggregation.MongoBuilder = Base.extend({
     // Fields.
-    finalize: null,
+    finalize: function() { },
     initial: { count: 0 },
     keys: null,
     reduce: function(doc, out) {
@@ -2461,13 +2871,13 @@
     toJSON: function() {
       // Required fields.
       var result = {
+        finalize: this.finalize.toString(),
         initial: this.initial,
         key: this.keys,
         reduce: this.reduce.toString()
       };
 
       // Optional fields.
-      this.finalize && (result.finalize = this.finalize.toString());
       var query = this.query && this.query.toJSON().query;
       query && (result.condition = query);
 
