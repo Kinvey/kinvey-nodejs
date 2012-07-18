@@ -123,7 +123,7 @@
    * 
    * @constant
    */
-  Kinvey.SDK_VERSION = '0.9.5';
+  Kinvey.SDK_VERSION = '0.9.6';
 
   /**
    * Returns current user, or null if not set.
@@ -758,7 +758,7 @@
       // Build device information.
       // Example: "linux chrome 18 0".
       return [
-        navigator.platform,
+        window.cordova ? 'phonegap' : navigator.platform,
         browser[1] || navigator.appName,
         browser[2] || 0,
         0 // always set device ID to 0.
