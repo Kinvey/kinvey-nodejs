@@ -61,7 +61,7 @@ var query = new Kinvey.Query();
 query.on('author').equals('Robert Kennedy');
 
 // Create a collection, and pass in the query.
-var bookCollection = new Kinvey.Collection('book', query);
+var bookCollection = new Kinvey.Collection('book', { query: query });
 bookCollection.fetch({
   success: function(list) {
     // list is an array of books written by Kennedy.

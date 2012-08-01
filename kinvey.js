@@ -58,7 +58,9 @@
       // Set static properties.
       if(properties) {
         for(var prop in properties) {
-          def[prop] = properties[prop];
+          if(properties.hasOwnProperty(prop)) {
+            def[prop] = properties[prop];
+          }
         }
       }
 
@@ -76,6 +78,17 @@
     return fn.bind ? fn.bind(thisArg) : function() {
       return fn.apply(thisArg, arguments);
     };
+  };
+
+  // Merges multiple source objects into one newly created object.
+  var merge = function(/*sources*/) {
+    var target = {};
+    Array.prototype.slice.call(arguments, 0).forEach(function(source) {
+      for(var prop in source) {
+        target[prop] = source[prop];
+      }
+    });
+    return target;
   };
 
   // Utilities.
@@ -98,6 +111,8 @@
     },
     set: function(key, value) {
       cache[key] = value;
+
+      // Update file cache.
       fs.writeFileSync(filename, JSON.stringify(cache), 'utf8');
     },
     remove: function(key) {
@@ -107,6 +122,210 @@
       fs.writeFileSync(filename, JSON.stringify(cache), 'utf8');
     }
   };
+
+  // Utilities.
+  var nodeHttp = require('http');
+  var nodeHttps = require('https');
+  var nodeUrl = require('url');
+
+  // Define the Xhr mixin.
+  var Xhr = (function() {
+    /**
+     * Base 64 encodes string.
+     * 
+     * @private
+     * @param {string} value
+     * @return {string} Encoded string.
+     */
+    var base64 = function(value) {
+      return new Buffer(value, 'utf8').toString('base64');
+    };
+
+    /**
+     * Returns authorization string.
+     * 
+     * @private
+     * @return {Object} Authorization.
+     */
+    var getAuth = function() {
+      // Use master secret if specified.
+      if(null !== Kinvey.masterSecret) {
+        return 'Basic ' + this._base64(Kinvey.appKey + ':' + Kinvey.masterSecret);
+      }
+
+      // Use Session Auth if there is a current user.
+      var user = Kinvey.getCurrentUser();
+      if(null !== user) {
+        return 'Kinvey ' + user.getToken();
+      }
+
+      // Use application credentials as last resort.
+      return 'Basic ' + this._base64(Kinvey.appKey + ':' + Kinvey.appSecret);
+    };
+
+    /**
+     * Returns device information.
+     * 
+     * @private
+     * @return {string} Device information.
+     */
+    var getDeviceInfo = function() {
+      // Example: "linux node v0.6.13 0".
+      return [
+        process.platform,
+        process.title,
+        process.version,
+        0// always set device ID to 0.
+      ].map(function(value) {
+        return value.toString().toLowerCase().replace(' ', '_');
+      }).join(' ');
+    };
+
+    /**
+     * Sends a request against Kinvey.
+     * 
+     * @private
+     * @param {string} method Request method.
+     * @param {string} url Request URL.
+     * @param {string} body Request body.
+     * @param {Object} options
+     * @param {function(response, info)} [options.success] Success callback.
+     * @param {function(error, info)} [options.error] Failure callback.
+     */
+    var send = function(method, url, body, options) {
+      options || (options = {});
+      options.success || (options.success = this.options.success);
+      options.error || (options.error = this.options.error);
+
+      // For now, include authorization in this adapter. Ideally, it should
+      // have some external interface.
+      if(null === Kinvey.getCurrentUser() && Kinvey.Store.AppData.USER_API !== this.api && null === Kinvey.masterSecret) {
+        return Kinvey.User.create({}, merge(options, {
+          success: bind(this, function() {
+            this._send(method, url, body, options);
+          })
+        }));
+      }
+
+      // Add host to URL.
+      url = Kinvey.HOST + url;
+
+      // Headers.
+      var headers = {
+        Accept: 'application/json, text/javascript',
+        Authorization: this._getAuth(),
+        'X-Kinvey-API-Version': Kinvey.API_VERSION,
+        'X-Kinvey-Device-Information': this._getDeviceInfo()
+      };
+      body && (headers['Content-Type'] = 'application/json; charset=utf-8');
+
+      // Execute request.
+      this._xhr(method, url, body, merge(options, {
+        headers: headers,
+        success: function(response, info) {
+          // Response is expected to be either empty, or valid JSON.
+          response = response ? JSON.parse(response) : null;
+          options.success(response, info);
+        },
+        error: function(response, info) {
+          // Response could be valid JSON if the error occurred at Kinvey.
+          try {
+            response = JSON.parse(response);
+          }
+          catch(_) {// Or just the error type if something else went wrong.
+            var error = {
+              abort: 'The request was aborted',
+              error: 'The request failed',
+              timeout: 'The request timed out'
+            };
+
+            // Execute application-level handler.
+            response = {
+              error: Kinvey.Error.REQUEST_FAILED,
+              description: error[response] || error.error,
+              debug: ''
+            };
+          }
+
+          // Return.
+          options.error(response, info);
+        }
+      }));
+    };
+
+    /**
+     * Sends a request.
+     * 
+     * @private
+     * @param {string} method Request method.
+     * @param {string} url Request URL.
+     * @param {string} body Request body.
+     * @param {Object} options
+     * @param {Object} [options.headers] Request headers.
+     * @param {integer} [options.timeout] Request timeout (ms).
+     * @param {function(status, response)} [options.success] Success callback.
+     * @param {function(type)} [options.error] Failure callback.
+     */
+    var xhr = function(method, url, body, options) {
+      options || (options = {});
+      options.headers || (options.headers = {});
+      options.success || (options.success = this.options.success);
+      options.error || (options.error = this.options.error);
+
+      // Add Content-Length header.
+      options.headers['Content-Length'] = body ? body.length : 0;
+
+      // Create request.
+      var path = nodeUrl.parse(url);
+      var adapter = 'https:' === path.protocol ? nodeHttps : nodeHttp;
+      var request = adapter.request({
+        host: path.hostname,
+        path: path.pathname + (path.search ? path.search : ''),
+        port: path.port,
+        method: method,
+        headers: options.headers
+      }, function(response) {
+        // Capture data stream.
+        var data = '';
+        response.on('data', function(chunk) {
+          data += chunk;
+        });
+
+        // Handle response when it completes.
+        // @link https://github.com/joyent/node/issues/728
+        var onComplete = function() {
+          // Success implicates status 2xx (Successful), or 304 (Not Modified).
+          if(2 === parseInt(response.statusCode / 100, 10) || 304 === response.statusCode) {
+            options.success(data, { network: true });
+          }
+          else {
+            options.error(data, { network: true });
+          }
+        };
+        response.on('close', onComplete);
+        response.on('end', onComplete);
+      });
+
+      // Define request error handler.
+      request.on('error', function(error) {
+        options.error(error.error, { network: true });
+      });
+
+      // Fire request.
+      body && request.write(body);// pass body.
+      request.end();
+    };
+
+    // Attach to context.
+    return function() {
+      this._base64 = base64;
+      this._getAuth = getAuth;
+      this._getDeviceInfo = getDeviceInfo;
+      this._send = send;
+      this._xhr = xhr;
+      return this;
+    };
+  }());
 
   // Current user.
   var currentUser = null;
@@ -119,11 +338,18 @@
   Kinvey.API_VERSION = 1;
 
   /**
+   * Host.
+   * 
+   * @constant
+   */
+  Kinvey.HOST = 'https://baas.kinvey.com';
+
+  /**
    * SDK version.
    * 
    * @constant
    */
-  Kinvey.SDK_VERSION = '0.9.6';
+  Kinvey.SDK_VERSION = '0.9.7';
 
   /**
    * Returns current user, or null if not set.
@@ -146,7 +372,7 @@
    * </code>
    * 
    * @param {Object} options Kinvey credentials. Object expects properties:
-   *          "appKey", and "appSecret" or "masterSecret".
+   *          "appKey", and "appSecret" or "masterSecret". Optional: "sync".
    * @throws {Error}
    *           <ul>
    *           <li>On empty appKey,</li>
@@ -169,6 +395,9 @@
 
     // Restore current user.
     Kinvey.User._restore();
+
+    // Synchronize app in the background.
+    options.sync && Kinvey.Sync && Kinvey.Sync.application();
   };
 
   /**
@@ -186,11 +415,12 @@
    * </code>
    * 
    * @param {Object} [options]
-   * @param {function(response)} [options.success] Success callback.
-   * @param {function(error)} [options.error] Failure callback.
+   * @param {function(response, info)} [options.success] Success callback.
+   * @param {function(error, info)} [options.error] Failure callback.
    */
   Kinvey.ping = function(options) {
-    Kinvey.Net.factory(Kinvey.Net.APPDATA_API, '').send(options);
+    // Ping always targets the Kinvey backend.
+    new Kinvey.Store.AppData(null).query(null, options);
   };
 
   /**
@@ -203,6 +433,809 @@
   Kinvey.setCurrentUser = function(user) {
     currentUser = user;
   };
+
+  /**
+   * Kinvey Error namespace definition. Holds all possible errors.
+   * 
+   * @namespace
+   */
+  Kinvey.Error = {
+    // Client-side.
+    /** @constant */
+    DATABASE_ERROR: 'DatabaseError',
+
+    /** @constant */
+    NO_NETWORK: 'NoNetwork',
+
+    /** @constant */
+    OPERATION_DENIED: 'OperationDenied',
+
+    /** @constant */
+    REQUEST_FAILED: 'RequestFailed',
+
+    /** @constant */
+    RESPONSE_PROBLEM: 'ResponseProblem',
+
+    // Server-side.
+    /** @constant */
+    ENTITY_NOT_FOUND: 'EntityNotFound',
+
+    /** @constant */
+    COLLECTION_NOT_FOUND: 'CollectionNotFound',
+
+    /** @constant */
+    APP_NOT_FOUND: 'AppNotFound',
+
+    /** @constant */
+    USER_NOT_FOUND: 'UserNotFound',
+
+    /** @constant */
+    BLOB_NOT_FOUND: 'BlobNotFound',
+
+    /** @constant */
+    INVALID_CREDENTIALS: 'InvalidCredentials',
+
+    /** @constant */
+    KINVEY_INTERNAL_ERROR_RETRY: 'KinveyInternalErrorRetry',
+
+    /** @constant */
+    KINVEY_INTERNAL_ERROR_STOP: 'KinveyInternalErrorStop',
+
+    /** @constant */
+    USER_ALREADY_EXISTS: 'UserAlreadyExists',
+
+    /** @constant */
+    DUPLICATE_END_USERS: 'DuplicateEndUsers',
+
+    /** @constant */
+    INSUFFICIENT_CREDENTIALS: 'InsufficientCredentials',
+
+    /** @constant */
+    WRITES_TO_COLLECTION_DISALLOWED: 'WritesToCollectionDisallowed',
+
+    /** @constant */
+    INDIRECT_COLLECTION_ACCESS_DISALLOWED : 'IndirectCollectionAccessDisallowed',
+
+    /** @constant */
+    APP_PROBLEM: 'AppProblem',
+
+    /** @constant */
+    PARAMETER_VALUE_OUT_OF_RANGE: 'ParameterValueOutOfRange',
+
+    /** @constant */
+    CORS_DISABLED: 'CORSDisabled',
+
+    /** @constant */
+    INVALID_QUERY_SYNTAX: 'InvalidQuerySyntax',
+
+    /** @constant */
+    MISSING_QUERY: 'MissingQuery',
+
+    /** @constant */
+    JSON_PARSE_ERROR: 'JSONParseError',
+
+    /** @constant */
+    MISSING_REQUEST_HEADER: 'MissingRequestHeader',
+
+    /** @constant */
+    INCOMPLETE_REQUEST_BODY: 'IncompleteRequestBody',
+
+    /** @constant */
+    MISSING_REQUEST_PARAMETER: 'MissingRequestParameter',
+
+    /** @constant */
+    INVALID_IDENTIFIER: 'InvalidIdentifier',
+
+    /** @constant */
+    BAD_REQUEST: 'BadRequest',
+
+    /** @constant */
+    FEATURE_UNAVAILABLE: 'FeatureUnavailable',
+
+    /** @constant */
+    API_VERSION_NOT_IMPLEMENTED: 'APIVersionNotImplemented',
+
+    /** @constant */
+    API_VERSION_NOT_AVAILABLE: 'APIVersionNotAvailable'
+  };
+
+  // Define the Kinvey Entity class.
+  Kinvey.Entity = Base.extend({
+    // Identifier attribute.
+    ATTR_ID: '_id',
+
+    /**
+     * Creates a new entity.
+     * 
+     * @example <code>
+     * var entity = new Kinvey.Entity({}, 'my-collection');
+     * var entity = new Kinvey.Entity({ key: 'value' }, 'my-collection');
+     * </code>
+     * 
+     * @name Kinvey.Entity
+     * @constructor
+     * @param {Object} [attr] Attribute object.
+     * @param {string} collection Owner collection.
+     * @param {Object} options Options.
+     * @throws {Error} On empty collection.
+     */
+    constructor: function(attr, collection, options) {
+      if(null == collection) {
+        throw new Error('Collection must not be null');
+      }
+      this.attr = attr || {};
+      this.collection = collection;
+      this.metadata = null;
+
+      // Options.
+      options || (options = {});
+      this.store = Kinvey.Store.factory(collection, options.store, options.options);
+    },
+
+    /** @lends Kinvey.Entity# */
+
+    /**
+     * Destroys entity.
+     * 
+     * @param {Object} [options]
+     * @param {function(entity, info)} [options.success] Success callback.
+     * @param {function(error, info)} [options.error] Failure callback.
+     */
+    destroy: function(options) {
+      options || (options = {});
+      this.store.remove(this.toJSON(), merge(options, {
+        success: bind(this, function(_, info) {
+          options.success && options.success(this, info);
+        })
+      }));
+    },
+
+    /**
+     * Returns attribute, or null if not set.
+     * 
+     * @param {string} key Attribute key.
+     * @throws {Error} On empty key.
+     * @return {*} Attribute.
+     */
+    get: function(key) {
+      if(null == key) {
+        throw new Error('Key must not be null');
+      }
+
+      // Return attribute, or null if attribute is null or undefined.
+      var value = this.attr[key];
+      return null != value ? value : null;
+    },
+
+    /**
+     * Returns id or null if not set.
+     * 
+     * @return {string} id
+     */
+    getId: function() {
+      return this.get(this.ATTR_ID);
+    },
+
+    /**
+     * Returns metadata.
+     * 
+     * @return {Kinvey.Metadata} Metadata.
+     */
+    getMetadata: function() {
+      // Lazy load metadata object, and return it.
+      this.metadata || (this.metadata = new Kinvey.Metadata(this.attr));
+      return this.metadata;
+    },
+
+    /**
+     * Returns whether entity is persisted.
+     * 
+     * @return {boolean}
+     */
+    isNew: function() {
+      return null === this.getId();
+    },
+
+    /**
+     * Loads entity by id.
+     * 
+     * @param {string} id Entity id.
+     * @param {Object} [options]
+     * @param {function(entity, info)} [options.success] Success callback.
+     * @param {function(error, info)} [options.error] Failure callback.
+     * @throws {Error} On empty id.
+     */
+    load: function(id, options) {
+      if(null == id) {
+        throw new Error('Id must not be null');
+      }
+      options || (options = {});
+
+      this.store.query(id, merge(options, {
+        success: bind(this, function(response, info) {
+          this.attr = response;
+          this.metadata = null;// Reset.
+          options.success && options.success(this, info);
+        })
+      }));
+    },
+
+    /**
+     * Saves entity.
+     * 
+     * @param {Object} [options]
+     * @param {function(entity, info)} [options.success] Success callback.
+     * @param {function(error, info)} [options.error] Failure callback.
+     */
+    save: function(options) {
+      options || (options = {});
+      this.store.save(this.toJSON(), merge(options, {
+        success: bind(this, function(response, info) {
+          this.attr = response;
+          this.metadata = null;// Reset.
+          options.success && options.success(this, info);
+        })
+      }));
+    },
+
+    /**
+     * Sets attribute.
+     * 
+     * @param {string} key Attribute key.
+     * @param {*} value Attribute value.
+     * @throws {Error} On empty key.
+     */
+    set: function(key, value) {
+      if(null == key) {
+        throw new Error('Key must not be null');
+      }
+      this.attr[key] = value;
+    },
+
+    /**
+     * Sets id.
+     * 
+     * @param {string} id Id.
+     * @throws {Error} On empty id.
+     */
+    setId: function(id) {
+      if(null == id) {
+        throw new Error('Id must not be null');
+      }
+      this.set(this.ATTR_ID, id);
+    },
+
+    /**
+     * Sets metadata.
+     * 
+     * @param {Kinvey.Metadata} metadata Metadata object.
+     * @throws {Error} On invalid instance.
+     */
+    setMetadata: function(metadata) {
+      if(metadata && !(metadata instanceof Kinvey.Metadata)) {
+        throw new Error('Metadata must be an instanceof Kinvey.Metadata');
+      }
+      this.metadata = metadata || null;
+    },
+
+    /**
+     * Returns JSON representation. Used by JSON#stringify.
+     * 
+     * @returns {Object} JSON representation.
+     */
+    toJSON: function() {
+      var result = this.attr;
+
+      // Add ACL metadata.
+      this.metadata && (result._acl = this.metadata.toJSON()._acl);
+
+      return result;
+    },
+
+    /**
+     * Removes attribute.
+     * 
+     * @param {string} key Attribute key.
+     */
+    unset: function(key) {
+      delete this.attr[key];
+    }
+  });
+
+  // Define the Kinvey Collection class.
+  Kinvey.Collection = Base.extend({
+    // List of entities.
+    list: [],
+
+    // Mapped entity class.
+    entity: Kinvey.Entity,
+
+    /**
+     * Creates new collection.
+     * 
+     * @example <code>
+     * var collection = new Kinvey.Collection('my-collection');
+     * </code>
+     * 
+     * @constructor
+     * @name Kinvey.Collection
+     * @param {string} name Collection name.
+     * @param {Object} [options] Options.
+     * @throws {Error}
+     *           <ul>
+     *           <li>On empty name,</li>
+     *           <li>On invalid query instance.</li>
+     *           </ul>
+     */
+    constructor: function(name, options) {
+      if(null == name) {
+        throw new Error('Name must not be null');
+      }
+      this.name = name;
+
+      // Options.
+      options || (options = {});
+      this.setQuery(options.query || new Kinvey.Query());
+      this.store = Kinvey.Store.factory(this.name, options.store, options.options);
+    },
+
+    /** @lends Kinvey.Collection# */
+
+    /**
+     * Aggregates entities in collection.
+     * 
+     * @param {Kinvey.Aggregation} aggregation Aggregation object.
+     * @param {Object} [options]
+     * @param {function(aggregation, info)} [options.success] Success callback.
+     * @param {function(error, info)} [options.error] Failure callback.
+     */
+    aggregate: function(aggregation, options) {
+      if(!(aggregation instanceof Kinvey.Aggregation)) {
+        throw new Error('Aggregation must be an instanceof Kinvey.Aggregation');
+      }
+      aggregation.setQuery(this.query);// respect collection query.
+      this.store.aggregate(aggregation.toJSON(), options);
+    },
+
+    /**
+     * Clears collection.
+     * 
+     * @param {Object} [options]
+     * @param {function(info)} [success] Success callback.
+     * @param {function(error, info)} [error] Failure callback.
+     */
+    clear: function(options) {
+      options || (options = {});
+      this.store.removeWithQuery(this.query.toJSON(), merge(options, {
+        success: bind(this, function(_, info) {
+          this.list = [];
+          options.success && options.success(info);
+        })
+      }));
+    },
+
+    /**
+     * Counts number of entities.
+     * 
+     * @example <code>
+     * var collection = new Kinvey.Collection('my-collection');
+     * collection.count({
+     *   success: function(i) {
+     *    console.log('Number of entities: ' + i);
+     *   },
+     *   error: function(error) {
+     *     console.log('Count failed', error.description);
+     *   }
+     * });
+     * </code>
+     * 
+     * @param {Object} [options]
+     * @param {function(count, info)} [success] Success callback.
+     * @param {function(error, info)} [error] Failure callback.
+     */
+    count: function(options) {
+      options || (options = {});
+
+      var aggregation = new Kinvey.Aggregation();
+      aggregation.setInitial({ count: 0 });
+      aggregation.setReduce(function(doc, out) {
+        out.count += 1;
+      });
+
+      this.store.aggregate(aggregation.toJSON(), merge(options, {
+        success: function(response, info) {
+          options.success && options.success(response[0].count, info);
+        }
+      }));
+    },
+
+    /**
+     * Fetches entities in collection.
+     * 
+     * @param {Object} [options]
+     * @param {function(list, info)} [options.success] Success callback.
+     * @param {function(error, info)} [options.error] Failure callback.
+     */
+    fetch: function(options) {
+      options || (options = {});
+
+      // Send request.
+      this.store.queryWithQuery(this.query.toJSON(), merge(options, {
+        success: bind(this, function(response, info) {
+          this.list = [];
+          response.forEach(bind(this, function(attr) {
+            this.list.push(new this.entity(attr, this.name, { store: this.store }));
+          }));
+          options.success && options.success(this.list, info);
+        })
+      }));
+    },
+
+    /**
+     * Sets query.
+     * 
+     * @param {Kinvey.Query} [query] Query.
+     * @throws {Error} On invalid instance.
+     */
+    setQuery: function(query) {
+      if(query && !(query instanceof Kinvey.Query)) {
+        throw new Error('Query must be an instanceof Kinvey.Query');
+      }
+      this.query = query || new Kinvey.Query();
+    }
+  });
+
+  // Function to get the cache key for this app.
+  var CACHE_TAG = function() {
+    return 'Kinvey.' + Kinvey.appKey;
+  };
+
+  // Define the Kinvey User class.
+  Kinvey.User = Kinvey.Entity.extend({
+    // Credential attributes.
+    ATTR_USERNAME: 'username',
+    ATTR_PASSWORD: 'password',
+
+    // Authorization token.
+    token: null,
+
+    /**
+     * Creates a new user.
+     * 
+     * @example <code>
+     * var user = new Kinvey.User();
+     * var user = new Kinvey.User({ key: 'value' });
+     * </code>
+     * 
+     * @name Kinvey.User
+     * @constructor
+     * @extends Kinvey.Entity
+     * @param {Object} [attr] Attributes.
+     */
+    constructor: function(attr) {
+      Kinvey.Entity.prototype.constructor.call(this, attr, 'user');
+    },
+
+    /** @lends Kinvey.User# */
+
+    /**
+     * Destroys user. Use with caution.
+     * 
+     * @override
+     * @see Kinvey.Entity#destroy
+     */
+    destroy: function(options) {
+      options || (options = {});
+
+      // Destroying the user will automatically invalidate its token, so no
+      // need to logout explicitly.
+      Kinvey.Entity.prototype.destroy.call(this, merge(options, {
+        success: bind(this, function(_, info) {
+          this._logout();
+          options.success && options.success(this, info);
+        })
+      }));
+    },
+
+    /**
+     * Returns token, or null if not set.
+     * 
+     * @return {string} Token.
+     */
+    getToken: function() {
+      return this.token;
+    },
+
+    /**
+     * Returns username, or null if not set.
+     * 
+     * @return {string} Username.
+     */
+    getUsername: function() {
+      return this.get(this.ATTR_USERNAME);
+    },
+
+    /**
+     * Logs in user.
+     * 
+     * @example <code> 
+     * var user = new Kinvey.User();
+     * user.login('username', 'password', {
+     *   success: function() {
+     *     console.log('Login successful');
+     *   },
+     *   error: function(error) {
+     *     console.log('Login failed', error);
+     *   }
+     * });
+     * </code>
+     * 
+     * @param {string} username Username.
+     * @param {string} password Password.
+     * @param {Object} [options]
+     * @param {function(entity, info)} [options.success] Success callback.
+     * @param {function(error, info)} [options.error] Failure callback.
+     */
+    login: function(username, password, options) {
+      options || (options = {});
+
+      // Make sure only one user is active at the time.
+      var currentUser = Kinvey.getCurrentUser();
+      if(null !== currentUser) {
+        currentUser.logout(merge(options, {
+          success: bind(this, function() {
+            this.login(username, password, options);
+          })
+        }));
+        return;
+      }
+
+      // Send request.
+      this.store.login({
+        username: username,
+        password: password
+      }, merge(options, {
+        success: bind(this, function(response, info) {
+          // Extract token.
+          this._login(response._kmd.authtoken);
+          delete response._kmd.authtoken;
+
+          // Update attributes. This does not include the users password.
+          this.attr = response;
+
+          options.success && options.success(this, info);
+        })
+      }));
+    },
+
+    /**
+     * Logs out user.
+     * 
+     * @param {Object} [options] Options.
+     * @param {function(info)} [options.success] Success callback.
+     * @param {function(error, info)} [options.error] Failure callback.
+     */
+    logout: function(options) {
+      options || (options = {});
+
+      // Make sure we only logout the current user.
+      if(!this.isLoggedIn) {
+        options.success && options.success({});
+      }
+      this.store.logout({}, merge(options, {
+        success: bind(this, function(_, info) {
+          this._logout();
+          options.success && options.success(info);
+        })
+      }));
+    },
+
+    /**
+     * Saves a user.
+     * 
+     * @override
+     * @see Kinvey.Entity#save
+     */
+    save: function(options) {
+      options || (options = {});
+      if(!this.isLoggedIn) {
+        options.error && options.error({
+          code: Kinvey.Error.OPERATION_DENIED,
+          description: 'This operation is not allowed',
+          debug: 'Cannot save a user which is not logged in.'
+        }, {});
+        return;
+      }
+
+      // Parent method will always update.
+      Kinvey.Entity.prototype.save.call(this, merge(options, {
+        success: bind(this, function(_, info) {
+          this._saveToDisk();// Refresh cache.
+          options.success && options.success(this, info);
+        })
+      }));
+    },
+
+    /**
+     * Removes any user saved on disk.
+     * 
+     * @private
+     */
+    _deleteFromDisk: function() {
+      Storage.remove(CACHE_TAG());
+    },
+
+    /**
+     * Marks user as logged in. This method should never be called standalone,
+     * but always involve some network request.
+     * 
+     * @private
+     * @param {string} token Token.
+     */
+    _login: function(token) {
+      Kinvey.setCurrentUser(this);
+      this.isLoggedIn = true;
+      this.token = token;
+      this._saveToDisk();
+    },
+
+    /**
+     * Marks user no longer as logged in.
+     * 
+     * @private
+     */
+    _logout: function() {
+      Kinvey.setCurrentUser(null);
+      this.isLoggedIn = false;
+      this.token = null;
+      this._deleteFromDisk();
+    },
+
+    /**
+     * Saves current user to disk.
+     * 
+     * @private
+     */
+    _saveToDisk: function() {
+      Storage.set(CACHE_TAG(), {
+        token: this.token,
+        user: this.toJSON()
+      });
+    }
+  }, {
+    /** @lends Kinvey.User */
+
+    /**
+     * Creates the current user.
+     * 
+     * @example <code>
+     * Kinvey.User.create({
+     *   username: 'username'
+     * }, {
+     *   success: function(user) {
+     *     console.log('User created', user);
+     *   },
+     *   error: function(error) {
+     *     console.log('User not created', error.message);
+     *   }
+     * });
+     * </code>
+     * 
+     * @param {Object} attr Attributes.
+     * @param {Object} [options]
+     * @param {function(user)} [options.success] Success callback.
+     * @param {function(error)} [options.error] Failure callback.
+     * @return {Kinvey.User} The user instance (not necessarily persisted yet).
+     */
+    create: function(attr, options) {
+      options || (options = {});
+
+      // Make sure only one user is active at the time.
+      var currentUser = Kinvey.getCurrentUser();
+      if(null !== currentUser) {
+        currentUser.logout(merge(options, {
+          success: function() {
+            Kinvey.User.create(attr, options);
+          }
+        }));
+        return;
+      }
+
+      // Create a new user.
+      var user = new Kinvey.User(attr);
+      Kinvey.Entity.prototype.save.call(user, merge(options, {
+        success: bind(user, function() {
+          // Unset the password, we don't need it any more.
+          var password = this.get(this.ATTR_PASSWORD);
+          this.unset(this.ATTR_PASSWORD);
+
+          // Login the created user.
+          this.login(this.getUsername(), password, options);
+        })
+      }));
+      return user;// return the instance
+    },
+
+    /**
+     * Initializes a current user. Returns the current user, otherwise creates
+     * an anonymous user. This method is called internally when doing a network
+     * request. Manually invoking this function is however allowed.
+     * 
+     * @param {Object} [options]
+     * @param {function(user)} [options.success] Success callback.
+     * @param {function(error)} [options.error] Failure callback.
+     * @return {Kinvey.User} The user instance. (not necessarily persisted yet).
+     */
+    init: function(options) {
+      options || (options = {});
+
+      // Check whether there already is a current user.
+      var user = Kinvey.getCurrentUser();
+      if(null !== user) {
+        options.success && options.success(user, {});
+        return user;
+      }
+
+      // No cached user available, create anonymous user.
+      return Kinvey.User.create({}, options);
+    },
+
+    /**
+     * Restores user stored locally on the device. This method is called by
+     * Kinvey.init(), and should not be called anywhere else.
+     * 
+     * @private
+     */
+    _restore: function() {
+      // Return if there already is a current user. Safety check.
+      if(null !== Kinvey.getCurrentUser()) {
+        return;
+      }
+
+      // Retrieve and restore user from storage.
+      var data = Storage.get(CACHE_TAG());
+      if(null !== data && null != data.token && null != data.user) {
+        new Kinvey.User(data.user)._login(data.token);
+      }
+    }
+  });
+
+  // Define the Kinvey UserCollection class.
+  Kinvey.UserCollection = Kinvey.Collection.extend({
+    // Mapped entity class.
+    entity: Kinvey.User,
+
+    /**
+     * Creates new user collection.
+     * 
+     * @example <code>
+     * var collection = new Kinvey.UserCollection();
+     * </code>
+     * 
+     * @name Kinvey.UserCollection
+     * @constructor
+     * @extends Kinvey.Collection
+     * @param {Kinvey.Query} [query] Query.
+     */
+    constructor: function(query) {
+      Kinvey.Collection.prototype.constructor.call(this, 'user', query);
+    },
+
+    /** @lends Kinvey.UserCollection# */
+
+    /**
+     * Clears collection. This action is not allowed.
+     * 
+     * @override
+     */
+    clear: function(options) {
+      options && options.error && options.error({
+        code: Kinvey.Error.OPERATION_DENIED,
+        description: 'This operation is not allowed',
+        debug: ''
+      });
+    }
+  });
 
   // Define the Kinvey Metadata class.
   Kinvey.Metadata = Base.extend({
@@ -380,1440 +1413,6 @@
         _acl: this.acl,
         _kmd: this.kmd
       };
-    }
-  });
-
-  /**
-   * Kinvey Error namespace definition. Holds all possible errors.
-   * 
-   * @namespace
-   */
-  Kinvey.Error = {
-    // Client-side.
-    /** @constant */
-    OPERATION_DENIED: 'OperationDenied',
-
-    /** @constant */
-    REQUEST_FAILED: 'RequestFailed',
-
-    /** @constant */
-    RESPONSE_PROBLEM: 'ResponseProblem',
-
-    // Server-side.
-    /** @constant */
-    ENTITY_NOT_FOUND: 'EntityNotFound',
-
-    /** @constant */
-    COLLECTION_NOT_FOUND: 'CollectionNotFound',
-
-    /** @constant */
-    APP_NOT_FOUND: 'AppNotFound',
-
-    /** @constant */
-    USER_NOT_FOUND: 'UserNotFound',
-
-    /** @constant */
-    BLOB_NOT_FOUND: 'BlobNotFound',
-
-    /** @constant */
-    INVALID_CREDENTIALS: 'InvalidCredentials',
-
-    /** @constant */
-    KINVEY_INTERNAL_ERROR_RETRY: 'KinveyInternalErrorRetry',
-
-    /** @constant */
-    KINVEY_INTERNAL_ERROR_STOP: 'KinveyInternalErrorStop',
-
-    /** @constant */
-    USER_ALREADY_EXISTS: 'UserAlreadyExists',
-
-    /** @constant */
-    DUPLICATE_END_USERS: 'DuplicateEndUsers',
-
-    /** @constant */
-    INSUFFICIENT_CREDENTIALS: 'InsufficientCredentials',
-
-    /** @constant */
-    WRITES_TO_COLLECTION_DISALLOWED: 'WritesToCollectionDisallowed',
-
-    /** @constant */
-    INDIRECT_COLLECTION_ACCESS_DISALLOWED : 'IndirectCollectionAccessDisallowed',
-
-    /** @constant */
-    APP_PROBLEM: 'AppProblem',
-
-    /** @constant */
-    PARAMETER_VALUE_OUT_OF_RANGE: 'ParameterValueOutOfRange',
-
-    /** @constant */
-    CORS_DISABLED: 'CORSDisabled',
-
-    /** @constant */
-    INVALID_QUERY_SYNTAX: 'InvalidQuerySyntax',
-
-    /** @constant */
-    MISSING_QUERY: 'MissingQuery',
-
-    /** @constant */
-    JSON_PARSE_ERROR: 'JSONParseError',
-
-    /** @constant */
-    MISSING_REQUEST_HEADER: 'MissingRequestHeader',
-
-    /** @constant */
-    INCOMPLETE_REQUEST_BODY: 'IncompleteRequestBody',
-
-    /** @constant */
-    MISSING_REQUEST_PARAMETER: 'MissingRequestParameter',
-
-    /** @constant */
-    INVALID_IDENTIFIER: 'InvalidIdentifier',
-
-    /** @constant */
-    BAD_REQUEST: 'BadRequest',
-
-    /** @constant */
-    FEATURE_UNAVAILABLE: 'FeatureUnavailable',
-
-    /** @constant */
-    API_VERSION_NOT_IMPLEMENTED: 'APIVersionNotImplemented',
-
-    /** @constant */
-    API_VERSION_NOT_AVAILABLE: 'APIVersionNotAvailable'
-  };
-
-  /**
-   * Kinvey Net namespace definition. This namespace provides API and operation
-   * constants to allow different network adapters. Network adapters live in
-   * this namespace as well.
-   * 
-   * @namespace
-   */
-  Kinvey.Net = {
-    // API Constants
-    /**
-     * AppData API.
-     * 
-     * @constant
-     */
-    APPDATA_API: 'APPDATA',
-
-    /**
-     * User API.
-     * 
-     * @constant
-     */
-    USER_API: 'USER',
-
-    /**
-     * Resource API.
-     * 
-     * @constant
-     */
-    RESOURCE_API: 'RESOURCE',
-
-    // CRUD operation constants
-    /**
-     * Create operation.
-     * 
-     * @constant
-     */
-    CREATE: 'CREATE',
-
-    /**
-     * Read operation.
-     * 
-     * @constant
-     */
-    READ: 'READ',
-
-    /**
-     * Update operation.
-     * 
-     * @constant
-     */
-    UPDATE: 'UPDATE',
-
-    /**
-     * Delete operation.
-     * 
-     * @constant
-     */
-    DELETE: 'DELETE',
-
-    // Methods
-    /**
-     * Returns a network adapter.
-     * 
-     * @example <code>
-     * var net = Kinvey.Net.factory(Kinvey.Net.USER_API);
-     * var net = Kinvey.Net.factory(Kinvey.Net.USER_API, 'user-id');
-     * var net = Kinvey.Net.factory(Kinvey.Net.APPDATA_API, 'my-collection');
-     * var net = Kinvey.Net.factory(Kinvey.Net.APPDATA_API, 'my-collection', 'entity-id');
-     * </code>
-     * 
-     * @param {string} api One of Kinvey.Net API constants.
-     * @param {string} [collection] Collection name. Required when using the
-     *          AppData API.
-     * @param {string} [id] Entity id.
-     * @return {Object} One of Kinvey.Net.* adapters.
-     */
-    factory: function(api, collection, id) {
-      if('undefined' !== typeof Titanium) {// Titanium
-        return new Kinvey.Net.Titanium(api, collection, id);
-      }
-      if('undefined' !== typeof exports) {// node.js
-        return new Kinvey.Net.Node(api, collection, id);
-      }
-      return new Kinvey.Net.Http(api, collection, id);
-    }
-  };
-
-  /*globals btoa, navigator, XMLHttpRequest, window*/
-
-  // Define the Kinvey.Net.Http network adapter.
-  Kinvey.Net.Http = Base.extend({
-    // Constants
-    // Endpoints URLs.
-    ENDPOINT: (function(base) {
-      return {
-        BASE: base,
-        APPDATA: base + '/appdata',
-        RESOURCE: base + '/blob',
-        USER: base + '/user'
-      };
-    }('https://baas.kinvey.com')),
-
-    // Map CRUD operations to HTTP request methods.
-    METHOD: (function(Net) {
-      var map = {};
-      map[Net.CREATE] = 'POST';
-      map[Net.READ] = 'GET';
-      map[Net.UPDATE] = 'PUT';
-      map[Net.DELETE] = 'DELETE';
-      return map;
-    }(Kinvey.Net)),
-
-    // Properties.
-    data: null,
-    operation: Kinvey.Net.READ,
-    query: null,
-
-    /**
-     * Creates a new HTTP network adapter.
-     * 
-     * @name Kinvey.Net.Http
-     * @constructor
-     * @param {string} api One of Kinvey.Net API constants.
-     * @param {string} [collection] Collection name. Required when using the
-     *          AppData API.
-     * @param {string} [id] Entity id.
-     * @throws {Error}
-     *           <ul>
-     *           <li>On invalid api,</li>
-     *           <li>On undefined collection.</li>
-     *           </ul>
-     */
-    constructor: function(api, collection, id) {
-      if(null == api) {
-        throw new Error('API must not be null');
-      }
-      switch(api) {
-        case Kinvey.Net.APPDATA_API:
-          if(null == collection) {
-            throw new Error('Collection must not be null');
-          }
-          break;
-        case Kinvey.Net.USER_API:
-          break;
-        default:
-          throw new Error('API ' + api + ' is not supported');
-      }
-
-      this.api = api;
-      this.collection = collection;
-      this.id = id;
-    },
-
-    /** @lends Kinvey.Net.Http# */
-
-    /**
-     * Sends request.
-     * 
-     * @param {function(Object)} success Success callback. Only argument is a
-     *          response object.
-     * @param {function(Object)} failure Failure callback. Only argument is an
-     *          error object.
-     * @throws {Error} On unsupported client.
-     */
-    send: function(options) {
-      options || (options = {});
-      options.success || (options.success = function() { });
-      options.error || (options.error = function() { });
-
-      // A current user is required for all but the User API, unless the master
-      // secret is specified.
-      if(null === Kinvey.getCurrentUser() && Kinvey.Net.USER_API !== this.api && null === Kinvey.masterSecret) {
-        Kinvey.User.init({
-          success: bind(this, function() {
-            this._process(options);
-          }),
-          error: options.error
-        });
-        return;
-      }
-
-      // There is a current user already, or the User API is requested.
-      this._process(options);
-    },
-
-    /**
-     * Sets data.
-     * 
-     * @param {Object} data JSON object.
-     */
-    setData: function(data) {
-      this.data = data;
-    },
-
-    /**
-     * Sets operation.
-     * 
-     * @param {string} operation Operation.
-     * @throws {Error} On invalid operation.
-     */
-    setOperation: function(operation) {
-      if(null == this.METHOD[operation]) {
-        throw new Error('Operation ' + operation + ' is not supported');
-      }
-      this.operation = operation;
-    },
-
-    /**
-     * Sets query.
-     * 
-     * @param {Kinvey.Query} query Query object.
-     * @throws {Error} On invalid instance.
-     */
-    setQuery: function(query) {
-      if(!(query instanceof Kinvey.Query)) {
-        throw new Error('Query must be of instance Kinvey.Query');
-      }
-      this.query = query;
-    },
-
-    /**
-     * Encodes a value, so that it can be safely used as part of the query
-     * string.
-     * 
-     * @private
-     * @param {*} value Value to be encoded.
-     * @return {string} Encoded value.
-     */
-    _encode: function(value) {
-      if(value instanceof Object) {
-        value = JSON.stringify(value);
-      }
-      return encodeURIComponent(value);
-    },
-
-    /**
-     * Returns plain authorization value.
-     * 
-     * @private
-     * @return {string} Authorization value.
-     */
-    _getAuth: function() {
-      // Use master secret if specified.
-      if(null !== Kinvey.masterSecret) {
-        return 'Basic ' + btoa(Kinvey.appKey + ':' + Kinvey.masterSecret);
-      }
-
-      // Use user credentials if specified, use app secret as last resort.
-      var currentUser = Kinvey.getCurrentUser();
-      if(null !== currentUser) {
-        return 'Kinvey ' + currentUser.getToken();
-      }
-      return 'Basic ' + btoa(Kinvey.appKey + ':' + Kinvey.appSecret);
-    },
-
-    /**
-     * Returns device information.
-     * 
-     * @private
-     * @return {string} Device information
-     */
-    _getDeviceInfo: function() {
-      // Try the most common browsers, fall back to navigator.appName otherwise.
-      var ua = navigator.userAgent.toLowerCase();
-
-      var rChrome = /(chrome)\/([\w]+)/;
-      var rSafari = /(safari)\/([\w.]+)/;
-      var rFirefox = /(firefox)\/([\w.]+)/;
-      var rOpera = /(opera)(?:.*version)?[ \/]([\w.]+)/;
-      var rIE = /(msie) ([\w.]+)/i;
-
-      var browser = rChrome.exec(ua) || rSafari.exec(ua) || rFirefox.exec(ua) || rOpera.exec(ua) || rIE.exec(ua) || [ ];
-
-      // Build device information.
-      // Example: "linux chrome 18 0".
-      return [
-        window.cordova ? 'phonegap' : navigator.platform,
-        browser[1] || navigator.appName,
-        browser[2] || 0,
-        0 // always set device ID to 0.
-      ].map(function(value) {
-        return value.toString().toLowerCase().replace(' ', '_');
-      }).join(' ');
-    },
-
-    /**
-     * Builds URL.
-     * 
-     * @private
-     * @return {string} URL.
-     */
-    _getUrl: function() {
-      var url = '';
-
-      // Build path.
-      switch(this.api) {
-        case Kinvey.Net.APPDATA_API:
-          url = this.ENDPOINT.APPDATA + '/' + Kinvey.appKey + '/' + this.collection;
-          if(null != this.id) {
-            url += '/' + this.id;
-          }
-          break;
-        case Kinvey.Net.USER_API:
-          // User API does not have a collection.
-          url = this.ENDPOINT.USER + '/' + Kinvey.appKey + '/';
-          if(null != this.id) {
-            url += this.id;
-          }
-          break;
-      }
-
-      // Build query string.
-      var param = [ ];
-      if(null != this.query) {
-        // Fill param with all query string parameters.
-        var parts = this.query.toJSON();
-        parts.limit && param.push('limit=' + this._encode(parts.limit));
-        parts.skip && param.push('skip=' + this._encode(parts.skip));
-        parts.sort && param.push('sort=' + this._encode(parts.sort));
-        param.push('query=' + (parts.query ? this._encode(parts.query) : '{}'));
-      }
-      else if(Kinvey.Net.READ === this.operation) {
-        param.push('query={}');
-      }
-      param.push('_=' + new Date().getTime());
-
-      // Join parts.
-      return url + (param.length ? '?' + param.join('&') : '');
-    },
-
-    /**
-     * Parses HTTP response.
-     * 
-     * @private
-     * @param {number} statusCode Status code.
-     * @param {string} body Response body.
-     * @param {Object} options
-     * @param {function(response)} options.success Success callback.
-     * @param {function(error)} options.error Failure callback.
-     */
-    _handleResponse: function(statusCode, body, options) {
-      // Parse body. Failing to parse body is not a big deal.
-      try {
-        body = JSON.parse(body);
-      }
-      catch(_) { }
-
-      // Fire callback.
-      if((200 <= statusCode && 300 > statusCode) || 304 === statusCode) {
-        options.success(body);
-      }
-      else {
-        // Construct application-level error object.
-        options.error({
-          code: body.error || Kinvey.Error.RESPONSE_PROBLEM,
-          description: body.description || 'There was a problem handling the response.',
-          debug: body.debug || 'The request was successful, but the response could not be parsed.'
-        });
-      }
-    },
-
-    /**
-     * Processes and fires HTTP request.
-     * 
-     * @private
-     * @param {Object} options
-     * @param {function(response)} options.success Success callback.
-     * @param {function(error)} options.error Failure callback.
-     */
-    _process: function(options) {
-      if('undefined' === typeof XMLHttpRequest) {
-        throw new Error('XMLHttpRequest is not supported');
-      }
-
-      // Create client and build request.
-      var request = new XMLHttpRequest();
-      request.open(this.METHOD[this.operation], this._getUrl(), true);
-
-      // Add headers.
-      var headers = {
-        Accept: 'application/json, text/javascript',
-        Authorization: this._getAuth(),
-        'X-Kinvey-API-Version': Kinvey.API_VERSION,
-        'X-Kinvey-Device-Information': this._getDeviceInfo()
-      };
-      this.data && (headers['Content-Type'] = 'application/json; charset=utf-8');
-
-      // Compatibility with Android 2.3.3.
-      // @link http://stackoverflow.com/questions/9146491/ajax-get-request-with-authorization-header-and-cors-on-android-2-3-3
-      if(window && window.location && Kinvey.Net.READ === this.operation) {
-        // Set origin header manually.
-        var origin = window.location.protocol + '//' + window.location.host;
-        headers['X-Kinvey-Origin'] = origin;
-      }
-      for(var header in headers) {
-        request.setRequestHeader(header, headers[header]);
-      }
-
-      // Handle response.
-      var self = this;
-      request.onerror = function() {
-        // Unfortunately, no error message is provided by XHR. Construct our own.
-        options.error({
-          code: Kinvey.Error.REQUEST_FAILED,
-          description: 'The request failed. Please retry your request',
-          debug: ''
-        });
-      };
-      request.onload = function() {
-        self._handleResponse(this.status, this.responseText, options);
-      };
-
-      // Fire request.
-      var data = this.data ? JSON.stringify(this.data) : null;
-      request.send(data);
-    }
-  });
-
-  // Utilities.
-  var https = require('https');
-  var url = require('url');
-
-  // Define the Kinvey.Net.Node network adapter.
-  Kinvey.Net.Node = Kinvey.Net.Http.extend({
-    /**
-     * Creates a new Node network adapter.
-     * 
-     * @name Kinvey.Net.Node
-     * @constructor
-     * @extends Kinvey.Net.Http
-     * @param {string} api One of Kinvey.Net API constants.
-     * @param {string} [collection] Collection name. Required when using the
-     *          AppData API.
-     * @param {string} [id] Entity id.
-     * @throws {Error}
-     *           <ul>
-     *           <li>On invalid api,</li>
-     *           <li>On undefined collection.</li>
-     *           </ul>
-     */
-    constructor: function(api, collection, id) {
-      Kinvey.Net.Http.prototype.constructor.call(this, api, collection, id);
-    },
-
-    /** @lends Kinvey.Net.Node# */
-
-    /**
-     * Returns plain authorization value.
-     * 
-     * @private
-     * @return {string} Authorization value.
-     */
-    _getAuth: function() {
-      var auth;
-
-      // Use master secret if specified.
-      if(null !== Kinvey.masterSecret) {
-        auth = Kinvey.appKey + ':' + Kinvey.masterSecret;
-        return 'Basic ' + new Buffer(auth, 'utf8').toString('base64');
-      }
-
-      // Use user credentials if specified, use app secret as last resort.
-      var currentUser = Kinvey.getCurrentUser();
-      if(null !== currentUser) {
-        return 'Kinvey ' + currentUser.getToken();
-      }
-
-      auth = Kinvey.appKey + ':' + Kinvey.appSecret;
-      return 'Basic ' + new Buffer(auth, 'utf8').toString('base64');
-    },
-
-    /**
-     * Returns device information.
-     * 
-     * @private
-     * @return {string} Device information
-     */
-    _getDeviceInfo: function() {
-      // Example: "linux node v0.6.13 0".
-      return [
-        process.platform,
-        process.title,
-        process.version,
-        0// always set device ID to 0.
-      ].map(function(value) {
-        return value.toString().toLowerCase().replace(' ', '_');
-      }).join(' ');
-    },
-
-    /**
-     * @override
-     * @private
-     * @see Kinvey.Net.Http#_process
-     */
-    _process: function(options) {
-      // Split URL in parts.
-      var parts = url.parse(this._getUrl());
-
-      // Build body.
-      var data = this.data ? JSON.stringify(this.data) : '';
-
-      // Build headers.
-      // Authorization header is set explicitly to support node 0.4.X.
-      // Add headers.
-      var headers = {
-        Accept: 'application/json, text/javascript',
-        Authorization: this._getAuth(),
-        'Content-Length': data.length,
-        'X-Kinvey-API-Version': Kinvey.API_VERSION,
-        'X-Kinvey-Device-Information': this._getDeviceInfo()
-      };
-      data && (headers['Content-Type'] = 'application/json; charset=utf-8');
-
-      // Build request.
-      var self = this;
-      var request = https.request({
-        host: parts.host,
-        path: parts.pathname + (parts.search ? parts.search : ''),
-        method: this.METHOD[this.operation],
-        headers: headers
-      }, function(response) {
-        // Capture data stream.
-        var body = '';
-        response.on('data', function(data) {
-          body += data;
-        });
-
-        // Handle response when it completes.
-        // @link https://github.com/joyent/node/issues/728
-        var onComplete = function() {
-          self._handleResponse(response.statusCode, body, options);
-        };
-        response.on('close', onComplete);
-        response.on('end', onComplete);
-      });
-      request.on('error', function(error) {// failed to fire request.
-        options.error({
-          code: Kinvey.Error.REQUEST_FAILED,
-          description: error.message || 'The request failed. Please retry your request',
-          debug: ''
-        });
-      });
-      data && request.write(data);// pass body.
-      request.end();// fire request.
-    }
-  });
-
-  // Define the Kinvey Entity class.
-  Kinvey.Entity = Base.extend({
-    // Associated Kinvey API.
-    API: Kinvey.Net.APPDATA_API,
-
-    // Identifier attribute.
-    ATTR_ID: '_id',
-
-    /**
-     * Creates a new entity.
-     * 
-     * @example <code>
-     * var entity = new Kinvey.Entity({}, 'my-collection');
-     * var entity = new Kinvey.Entity({ key: 'value' }, 'my-collection');
-     * </code>
-     * 
-     * @name Kinvey.Entity
-     * @constructor
-     * @param {Object} attr Attribute object.
-     * @param {string} collection Owner collection.
-     * @throws {Error} On empty collection.
-     */
-    constructor: function(attr, collection) {
-      if(null == collection) {
-        throw new Error('Collection must not be null');
-      }
-      this.attr = attr || {};
-      this.collection = collection;
-      this.metadata = null;
-    },
-
-    /** @lends Kinvey.Entity# */
-
-    /**
-     * Destroys entity.
-     * 
-     * @param {Object} [options]
-     * @param {function()} [options.success] Success callback.
-     * @param {function(error)} [options.error] Failure callback.
-     */
-    destroy: function(options) {
-      options || (options = {});
-
-      // Return instantly if entity is not saved yet.
-      if(this.isNew()) {
-        options.success && options.success();
-        return;
-      }
-
-      // Send request.
-      var net = Kinvey.Net.factory(this.API, this.collection, this.getId());
-      net.setOperation(Kinvey.Net.DELETE);
-      net.send({
-        success: function() {
-          options.success && options.success();
-        },
-        error: options.error
-      });
-    },
-
-    /**
-     * Returns attribute, or null if not set.
-     * 
-     * @param {string} key Attribute key.
-     * @throws {Error} On empty key.
-     * @return {*} Attribute.
-     */
-    get: function(key) {
-      if(null == key) {
-        throw new Error('Key must not be null');
-      }
-
-      // Return attribute, or null if attribute is null or undefined.
-      var value = this.attr[key];
-      return null != value ? value : null;
-    },
-
-    /**
-     * Returns id or null if not set.
-     * 
-     * @return {string} id
-     */
-    getId: function() {
-      return this.get(this.ATTR_ID);
-    },
-
-    /**
-     * Returns metadata.
-     * 
-     * @return {Kinvey.Metadata} Metadata.
-     */
-    getMetadata: function() {
-      // Lazy load metadata object, and return it.
-      this.metadata || (this.metadata = new Kinvey.Metadata(this.attr));
-      return this.metadata;
-    },
-
-    /**
-     * Returns whether entity is persisted.
-     * 
-     * @return {boolean}
-     */
-    isNew: function() {
-      return null === this.getId();
-    },
-
-    /**
-     * Loads entity by id.
-     * 
-     * @param {string} id Entity id.
-     * @param {Object} [options]
-     * @param {function(entity)} [options.success] Success callback.
-     * @param {function(error)} [options.error] Failure callback.
-     * @throws {Error} On empty id.
-     */
-    load: function(id, options) {
-      if(null == id) {
-        throw new Error('Id must not be null');
-      }
-      options || (options = {});
-
-      // Retrieve data.
-      Kinvey.Net.factory(this.API, this.collection, id).send({
-        success: bind(this, function(response) {
-          this.attr = response;
-          this.metadata = null;// Reset.
-          options.success && options.success(this);
-        }),
-        error: options.error
-      });
-    },
-
-    /**
-     * Saves entity.
-     * 
-     * @param {Object} [options]
-     * @param {function(entity)} [options.success] Success callback.
-     * @param {function(error)} [options.error] Failure callback.
-     */
-    save: function(options) {
-      options || (options = {});
-      var operation = this.isNew() ? Kinvey.Net.CREATE : Kinvey.Net.UPDATE;
-
-      // Retrieve data.
-      var net = Kinvey.Net.factory(this.API, this.collection, this.getId());
-      net.setData(this.toJSON());
-      net.setOperation(operation);
-      net.send({
-        success: bind(this, function(response) {
-          this.attr = response;
-          this.metadata = null;// Reset.
-          options.success && options.success(this);
-        }),
-        error: options.error
-      });
-    },
-
-    /**
-     * Sets attribute.
-     * 
-     * @param {string} key Attribute key.
-     * @param {*} value Attribute value.
-     * @throws {Error} On empty key.
-     */
-    set: function(key, value) {
-      if(null == key) {
-        throw new Error('Key must not be null');
-      }
-      this.attr[key] = value;
-    },
-
-    /**
-     * Sets metadata.
-     * 
-     * @param {Kinvey.Metadata} metadata Metadata object.
-     * @throws {Error} On invalid instance.
-     */
-    setMetadata: function(metadata) {
-      if(metadata && !(metadata instanceof Kinvey.Metadata)) {
-        throw new Error('Metadata must be an instanceof Kinvey.Metadata');
-      }
-      this.metadata = metadata || null;
-    },
-
-    /**
-     * Sets id.
-     * 
-     * @param {string} id Id.
-     * @throws {Error} On empty id.
-     */
-    setId: function(id) {
-      if(null == id) {
-        throw new Error('Id must not be null');
-      }
-      this.set(this.ATTR_ID, id);
-    },
-
-    /**
-     * Returns JSON representation. Used by JSON#stringify.
-     * 
-     * @returns {Object} JSON representation.
-     */
-    toJSON: function() {
-      var result = this.attr;
-
-      // Add ACL metadata.
-      this.metadata && (result._acl = this.metadata.toJSON()._acl);
-
-      return result;
-    },
-
-    /**
-     * Removes attribute.
-     * 
-     * @param {string} key Attribute key.
-     */
-    unset: function(key) {
-      delete this.attr[key];
-    }
-  });
-
-  // Define the Kinvey Collection class.
-  Kinvey.Collection = Base.extend({
-    // Associated Kinvey API.
-    API: Kinvey.Net.APPDATA_API,
-
-    // List of entities.
-    list: [ ],
-
-    // Mapped entity class.
-    entity: Kinvey.Entity,
-
-    /**
-     * Creates new collection.
-     * 
-     * @example <code>
-     * var collection = new Kinvey.Collection('my-collection');
-     * </code>
-     * 
-     * @constructor
-     * @name Kinvey.Collection
-     * @param {string} name Collection name.
-     * @param {Kinvey.Query} [query] Query.
-     * @throws {Error}
-     *           <ul>
-     *           <li>On empty name,</li>
-     *           <li>On invalid query instance.</li>
-     *           </ul>
-     */
-    constructor: function(name, query) {
-      if(null == name) {
-        throw new Error('Name must not be null');
-      }
-      this.setQuery(query);
-      this.name = name;
-    },
-
-    /** @lends Kinvey.Collection# */
-
-    /**
-     * Aggregates entities in collection.
-     * 
-     * @param {Kinvey.Aggregation} aggregation Aggregation object.
-     * @param {Object} [options] Options.
-     * @param {function(list)} [options.success] Success callback.
-     * @param {function(error)} [options.error] Failure callback.
-     */
-    aggregate: function(aggregation, options) {
-      if(!(aggregation instanceof Kinvey.Aggregation)) {
-        throw new Error('Aggregation must be an instanceof Kinvey.Aggregation');
-      }
-      aggregation.setQuery(this.query);// respect collection query.
-
-      var net = Kinvey.Net.factory(this.API, this.name, '_group');
-      net.setData(aggregation);
-      net.setOperation(Kinvey.Net.CREATE);
-      net.send(options);
-    },
-
-    /**
-     * Clears collection.
-     * 
-     * @param {Object} [options]
-     * @param {function()} [success] Success callback.
-     * @param {function(error)} [error] Failure callback.
-     */
-    clear: function(options) {
-      var net = Kinvey.Net.factory(this.API, this.name);
-      net.setOperation(Kinvey.Net.DELETE);
-      this.query ? net.setQuery(this.query) : net.setQuery(new Kinvey.Query());
-      net.send(options);
-    },
-
-    /**
-     * Counts number of entities.
-     * 
-     * @example <code>
-     * var collection = new Kinvey.Collection('my-collection');
-     * collection.count({
-     *   success: function(i) {
-     *    console.log('Number of entities: ' + i);
-     *   },
-     *   error: function(error) {
-     *     console.log('Count failed', error.message);
-     *   }
-     * });
-     * </code>
-     * 
-     * @param {Object} [options]
-     * @param {function(number)} [success] Success callback.
-     * @param {function(error)} [error] Failure callback.
-     */
-    count: function(options) {
-      options || (options = {});
-
-      var net = Kinvey.Net.factory(this.API, this.name, '_count');
-      this.query && net.setQuery(this.query);// set query
-      net.send({
-        success: function(response) {
-          options.success && options.success(response.count);
-        },
-        error: options.error
-      });
-    },
-
-    /**
-     * Fetches entities in collection.
-     * 
-     * @param {Object} [options]
-     * @param {function(list)} [options.success] Success callback.
-     * @param {function(error)} [options.error] Failure callback.
-     */
-    fetch: function(options) {
-      options || (options = {});
-
-      // Clear list.
-      this.list = [ ];
-
-      // Send request.
-      var net = Kinvey.Net.factory(this.API, this.name);
-      this.query && net.setQuery(this.query);// set query
-      net.send({
-        success: bind(this, function(response) {
-          response.forEach(bind(this, function(attr) {
-            this.list.push(new this.entity(attr, this.name));
-          }));
-          options.success && options.success(this.list);
-        }),
-        error: options.error
-      });
-    },
-
-    /**
-     * Sets query.
-     * 
-     * @param {Kinvey.Query} [query] Query.
-     * @throws {Error} On invalid instance.
-     */
-    setQuery: function(query) {
-      if(query && !(query instanceof Kinvey.Query)) {
-        throw new Error('Query must be an instanceof Kinvey.Query');
-      }
-      this.query = query || null;
-    }
-  });
-
-  // Function to get the cache key for this app.
-  var CACHE_TAG = function() {
-    return 'Kinvey.' + Kinvey.appKey;
-  };
-
-  // Define the Kinvey User class.
-  Kinvey.User = Kinvey.Entity.extend({
-    // Associated Kinvey API.
-    API: Kinvey.Net.USER_API,
-
-    // Credential attributes.
-    ATTR_USERNAME: 'username',
-    ATTR_PASSWORD: 'password',
-
-    // Authorization token.
-    token: null,
-
-    /**
-     * Creates a new user.
-     * 
-     * @example <code>
-     * var user = new Kinvey.User();
-     * var user = new Kinvey.User({ key: 'value' });
-     * </code>
-     * 
-     * @name Kinvey.User
-     * @constructor
-     * @extends Kinvey.Entity
-     * @param {Object} [attr] Attributes.
-     */
-    constructor: function(attr) {
-      // Users reside in a distinct API, without the notion of collections.
-      // Therefore, an empty string is passed to the parent constructor.
-      Kinvey.Entity.prototype.constructor.call(this, attr, '');
-    },
-
-    /** @lends Kinvey.User# */
-
-    /**
-     * Destroys user. Use with caution.
-     * 
-     * @override
-     * @see Kinvey.Entity#destroy
-     */
-    destroy: function(options) {
-      options || (options = {});
-
-      // Destroying the user will automatically invalidate its token, so no
-      // need to logout.
-      Kinvey.Entity.prototype.destroy.call(this, {
-        success: bind(this, function() {
-          this._logout();
-          options.success && options.success();
-        }),
-        error: options.error
-      });
-    },
-
-    /**
-     * Returns password, or null if not set.
-     * 
-     * @return {string} Password.
-     */
-    getPassword: function() {
-      return this.get(this.ATTR_PASSWORD);
-    },
-
-    /**
-     * Returns token, or null if not set.
-     * 
-     * @return {string} Token.
-     */
-    getToken: function() {
-      return this.token;
-    },
-
-    /**
-     * Returns username, or null if not set.
-     * 
-     * @return {string} Username.
-     */
-    getUsername: function() {
-      return this.get(this.ATTR_USERNAME);
-    },
-
-    /**
-     * Logs in user.
-     * 
-     * @example <code> 
-     * var user = new Kinvey.User();
-     * user.login('username', 'password', {
-     *   success: function() {
-     *     console.log('Login successful');
-     *   },
-     *   error: function(error) {
-     *     console.log('Login failed', error);
-     *   }
-     * });
-     * </code>
-     * 
-     * @param {string} username Username.
-     * @param {string} password Password.
-     * @param {Object} [options]
-     * @param {function(entity)} [options.success] Success callback.
-     * @param {function(error)} [options.error] Failure callback.
-     */
-    login: function(username, password, options) {
-      options || (options = {});
-
-      // Make sure only one user is active at the time.
-      var currentUser = Kinvey.getCurrentUser();
-      if(null !== currentUser) {
-        currentUser.logout({
-          success: bind(this, function() {
-            this.login(username, password, options);
-          }),
-          error: options.error
-        });
-        return;
-      }
-
-      // Retrieve user by its credentials.
-      var data = {};
-      data[this.ATTR_USERNAME] = username;
-      data[this.ATTR_PASSWORD] = password;
-
-      var net = Kinvey.Net.factory(this.API, this.collection, 'login');
-      net.setData(data);
-      net.setOperation(Kinvey.Net.CREATE);
-      net.send({
-        success: bind(this, function(response) {
-          // Extract token from response.
-          var token = response._kmd.authtoken;
-          delete response._kmd.authtoken;
-
-          // Update attributes. The response does not include the password, but
-          // we don't need it anyway.
-          this.attr = response;
-
-          // Mark this user as logged in.
-          this._login(token);
-
-          options.success && options.success(this);
-        }),
-        error: options.error
-      });
-    },
-
-    /**
-     * Logs out user.
-     * 
-     * @param {object} options Options.
-     * @param {function()} [options.success] Success callback.
-     * @param {function(error)} [options.error] Failure callback.
-     */
-    logout: function(options) {
-      options || (options = {});
-
-      if(this.isLoggedIn) {
-        // Invalidate token.
-        var net = Kinvey.Net.factory(this.API, this.collection, '_logout');
-        net.setOperation(Kinvey.Net.CREATE);
-        net.send({
-          success: bind(this, function() {
-            this._logout();
-            options.success && options.success();
-          }),
-          error: options.error
-        });
-      }
-      else {
-        options.success && options.success();
-      }
-    },
-
-    /**
-     * Saves a user.
-     * 
-     * @override
-     * @see Kinvey.Entity#save
-     */
-    save: function(options) {
-      options || (options = {});
-      if(!this.isLoggedIn) {
-        options && options.error && options.error({
-          code: Kinvey.Error.OPERATION_DENIED,
-          description: 'This operation is not allowed',
-          debug: 'Cannot save a user which is not logged in.'
-        });
-        return;
-      }
-
-      // Parent method will always update
-      Kinvey.Entity.prototype.save.call(this, {
-        success: bind(this, function() {
-          this._saveToDisk();// Refresh cache.
-          options.success && options.success(this);
-        }),
-        error: options.error
-      });
-    },
-
-    /**
-     * Sets password. Not implemented.
-     * 
-     * @deprecated
-     * @param {string} password Password.
-     * @throws {Error} On empty password.
-     */
-    setPassword: function(password) {
-      if(null == password) {
-        throw new Error('Password must not be null');
-      }
-      this.set(this.ATTR_PASSWORD, password);
-    },
-
-    /**
-     * Sets username. Not implemented.
-     * 
-     * @deprecated
-     * @param {string} username Username.
-     * @throws {Error} On empty username.
-     */
-    setUsername: function(username) {
-      if(null == username) {
-        throw new Error('Username must not be null');
-      }
-      this.set(this.ATTR_USERNAME, username);
-    },
-
-    /**
-     * Removes any user saved on disk.
-     * 
-     * @private
-     */
-    _deleteFromDisk: function() {
-      Storage.remove(CACHE_TAG());
-    },
-
-    /**
-     * Marks user as logged in. This method should never be called standalone,
-     * but always involve some network request.
-     * 
-     * @param {string} token Token.
-     * @private
-     */
-    _login: function(token) {
-      Kinvey.setCurrentUser(this);
-      this.token = token;
-      this.isLoggedIn = true;
-      this._saveToDisk();
-    },
-
-    /**
-     * Destroys login state for user. This method should never be called
-     * standalone.
-     * 
-     * @private
-     */
-    _logout: function() {
-      Kinvey.setCurrentUser(null);
-      this.token = null;
-      this.isLoggedIn = false;
-      this._deleteFromDisk();
-    },
-
-    /**
-     * Saves current user to disk.
-     * 
-     * @private
-     */
-    _saveToDisk: function() {
-      // Token also needs to be cached.
-      Storage.set(CACHE_TAG(), {
-        token: this.token,
-        user: this.toJSON()
-      });
-    }
-  }, {
-    /** @lends Kinvey.User */
-
-    /**
-     * Creates the current user.
-     * 
-     * @example <code>
-     * Kinvey.User.create({
-     *   username: 'username'
-     * }, {
-     *   success: function(user) {
-     *     console.log('User created', user);
-     *   },
-     *   error: function(error) {
-     *     console.log('User not created', error.message);
-     *   }
-     * });
-     * </code>
-     * 
-     * @param {Object} attr Attributes.
-     * @param {Object} [options]
-     * @param {function(user)} [options.success] Success callback.
-     * @param {function(error)} [options.error] Failure callback.
-     * @return {Kinvey.User} The user instance (not necessarily persisted yet).
-     */
-    create: function(attr, options) {
-      options || (options = {});
-
-      // Make sure only one user is active at the time.
-      var currentUser = Kinvey.getCurrentUser();
-      if(null !== currentUser) {
-        currentUser.logout({
-          success: function() {
-            Kinvey.User.create(attr, options);
-          },
-          error: options.error
-        });
-        return;
-      }
-
-      // Create a new user.
-      var user = new Kinvey.User(attr);
-      Kinvey.Entity.prototype.save.call(user, {
-        success: bind(user, function() {
-          // Unset the password on the user entity, we don't need it any more.
-          var password = this.getPassword();
-          this.unset(this.ATTR_PASSWORD);
-
-          // Login the created user.
-          this.login(this.getUsername(), password, options);
-        }),
-        error: options.error
-      });
-      return user;// return the instance
-    },
-
-    /**
-     * Initializes a current user. Returns the current user, otherwise creates
-     * an anonymous user. This method is called internally when doing a network
-     * request. Manually invoking this function is however allowed.
-     * 
-     * @param {Object} [options]
-     * @param {function(user)} [options.success] Success callback.
-     * @param {function(error)} [options.error] Failure callback.
-     * @return {Kinvey.User} The user instance. (not necessarily persisted yet).
-     */
-    init: function(options) {
-      options || (options = {});
-
-      // Check whether there already is a current user.
-      var user = Kinvey.getCurrentUser();
-      if(null !== user) {
-        options.success && options.success(user);
-        return user;
-      }
-
-      // No cached user available, create anonymous user.
-      return Kinvey.User.create({}, options);
-    },
-
-    /**
-     * Restores user stored locally on the device. This method is called by
-     * Kinvey.init(), and should not be called anywhere else.
-     * 
-     * @private
-     */
-    _restore: function() {
-      // Return if there already is a current user. Safety check.
-      if(null !== Kinvey.getCurrentUser()) {
-        return;
-      }
-
-      // Retrieve and restore user from storage.
-      var data = Storage.get(CACHE_TAG());
-      if(null !== data && null !== data.user && null !== data.token) {
-        // Restore user.
-        new Kinvey.User(data.user)._login(data.token);
-      }
-    }
-  });
-
-  // Define the Kinvey UserCollection class.
-  Kinvey.UserCollection = Kinvey.Collection.extend({
-    // Associated Kinvey API.
-    API: Kinvey.Net.USER_API,
-
-    // Mapped entity class.
-    entity: Kinvey.User,
-
-    /**
-     * Creates new user collection.
-     * 
-     * @example <code>
-     * var collection = new Kinvey.UserCollection();
-     * </code>
-     * 
-     * @name Kinvey.UserCollection
-     * @constructor
-     * @extends Kinvey.Collection
-     * @param {Kinvey.Query} [query] Query.
-     */
-    constructor: function(query) {
-      // Users reside in a distinct API, without the notion of collections.
-      // Therefore, an empty string is passed to the parent constructor.
-      Kinvey.Collection.prototype.constructor.call(this, '', query);
-    },
-
-    /** @lends Kinvey.UserCollection# */
-
-    /**
-     * Clears collection. This action is not allowed, not even by the master
-     * secret.
-     * 
-     * @override
-     */
-    clear: function(options) {
-      options && options.error && options.error({
-        code: Kinvey.Error.OPERATION_DENIED,
-        description: 'This operation is not allowed',
-        debug: ''
-      });
     }
   });
 
@@ -2687,7 +2286,9 @@
       // Complex condition.
       this.query[field] instanceof Object || (this.query[field] = {});
       for(var operator in expression) {
-        this.query[field][operator] = expression[operator];
+        if(expression.hasOwnProperty(operator)) {
+          this.query[field][operator] = expression[operator];
+        }
       }
     }
   });
@@ -2884,5 +2485,233 @@
       return result;
     }
   });
+
+  /**
+   * Kinvey Store namespace. Home to all stores.
+   * 
+   * @namespace
+   */
+  Kinvey.Store = {
+    /**
+     * AppData store.
+     * 
+     * @constant
+     */
+    APPDATA: 'appdata',
+
+    /**
+     * Returns store.
+     * 
+     * @param {string} collection Collection name.
+     * @param {Object|string} name Store, or store name.
+     * @param {Object} options Store options.
+     * @throws {Error} On invalid store instance.
+     * @return {Kinvey.Store.*} One of Kinvey.Store.*.
+     */
+    factory: function(collection, name, options) {
+      // Name could be a store instance already. Do a simple check to see
+      // whether collection name matches the target collection.
+      if(name instanceof Object) {
+        if(collection !== name.collection) {
+          throw new Error('Store collection does not match targeted collection');
+        }
+        return name;
+      }
+
+      // By default, use the AppData store.
+      return new Kinvey.Store.AppData(collection, options);
+    }
+  };
+
+  // Define the Kinvey.Store.AppData class.
+  Kinvey.Store.AppData = Base.extend({
+    // Default options.
+    options: {
+      timeout: 10000,// Timeout in ms.
+
+      success: function() { },
+      error: function() { }
+    },
+
+    /**
+     * Creates a new store.
+     * 
+     * @name Kinvey.Store.AppData
+     * @constructor
+     * @param {string} collection Collection name.
+     * @param {Object} [options] Options.
+     */
+    constructor: function(collection, options) {
+      this.api = Kinvey.Store.AppData.USER_API === collection ? Kinvey.Store.AppData.USER_API : Kinvey.Store.AppData.APPDATA_API;
+      this.collection = collection;
+
+      // Options.
+      options && this.configure(options);
+    },
+
+    /** @lends Kinvey.Store.AppData# */
+
+    /**
+     * Aggregates objects from the store.
+     * 
+     * @param {Object} aggregation Aggregation.
+     * @param {Object} [options] Options.
+     */
+    aggregate: function(aggregation, options) {
+      var url = this._getUrl({ id: '_group' });
+      this._send('POST', url, JSON.stringify(aggregation), options);
+    },
+
+    /**
+     * Configures store.
+     * 
+     * @param {Object} options
+     * @param {function(response, info)} [options.success] Success callback.
+     * @param {function(error, info)} [options.error] Failure callback.
+     * @param {integer} [options.timeout] Request timeout (in milliseconds).
+     */
+    configure: function(options) {
+      'undefined' !== typeof options.timeout && (this.options.timeout = options.timeout);
+
+      options.success && (this.options.success = options.success);
+      options.error && (this.options.error = options.error);
+    },
+
+    /**
+     * Logs in user.
+     * 
+     * @param {Object} object
+     * @param {Object} [options] Options.
+     */
+    login: function(object, options) {
+      var url = this._getUrl({ id: 'login' });
+      this._send('POST', url, JSON.stringify(object), options);
+    },
+
+    /**
+     * Logs out user.
+     * 
+     * @param {Object} object
+     * @param {Object} [options] Options.
+     */
+    logout: function(object, options) {
+      var url = this._getUrl({ id: '_logout' });
+      this._send('POST', url, null, options);
+    },
+
+    /**
+     * Queries the store for a specific object.
+     * 
+     * @param {string} id Object id.
+     * @param {Object} [options] Options.
+     */
+    query: function(id, options) {
+      var url = this._getUrl({ id: id });
+      this._send('GET', url, null, options);
+    },
+
+    /**
+     * Queries the store for multiple objects.
+     * 
+     * @param {Object} query Query object.
+     * @param {Object} [options] Options.
+     */
+    queryWithQuery: function(query, options) {
+      var url = this._getUrl({ query: query });
+      this._send('GET', url, null, options);
+    },
+
+    /**
+     * Removes object from the store.
+     * 
+     * @param {Object} object Object to be removed.
+     * @param {Object} [options] Options.
+     */
+    remove: function(object, options) {
+      var url = this._getUrl({ id: object._id });
+      this._send('DELETE', url, null, options);
+    },
+
+    /**
+     * Removes multiple objects from the store.
+     * 
+     * @param {Object} query Query object.
+     * @param {Object} [options] Options.
+     */
+    removeWithQuery: function(query, options) {
+      var url = this._getUrl({ query: query });
+      this._send('DELETE', url, null, options);
+    },
+
+    /**
+     * Saves object to the store.
+     * 
+     * @param {Object} object Object to be saved.
+     * @param {Object} [options] Options.
+     */
+    save: function(object, options) {
+      // Create the object if nonexistent, update otherwise.
+      var method = object._id ? 'PUT' : 'POST';
+
+      var url = this._getUrl({ id: object._id });
+      this._send(method, url, JSON.stringify(object), options);
+    },
+
+    /**
+     * Encodes value for use in query string.
+     * 
+     * @private
+     * @param {*} value Value to be encoded.
+     * @return {string} Encoded value.
+     */
+    _encode: function(value) {
+      if(value instanceof Object) {
+        value = JSON.stringify(value);
+      }
+      return encodeURIComponent(value);
+    },
+
+    /**
+     * Constructs URL.
+     * 
+     * @private
+     * @param {Object} parts URL parts.
+     * @return {string} URL.
+     */
+    _getUrl: function(parts) {
+      var url = '/' + this.api + '/' + Kinvey.appKey + '/';
+
+      // Only the AppData API has explicit collections.
+      if(Kinvey.Store.AppData.APPDATA_API === this.api && null != this.collection) {
+        url += this.collection + '/';
+      }
+      parts.id && (url += parts.id);
+
+      // Build query string.
+      var param = [];
+      if(null != parts.query) {
+        // Required query parts.
+        param.push('query=' + this._encode(parts.query.query || {}));
+
+        // Optional query parts.
+        parts.query.limit && param.push('limit=' + this._encode(parts.query.limit));
+        parts.query.skip && param.push('skip=' + this._encode(parts.query.skip));
+        parts.query.sort && param.push('sort=' + this._encode(parts.query.sort));
+      }
+
+      // Android < 4.0 caches all requests aggressively. For now, work around
+      // by adding a cache busting query string.
+      param.push('_=' + new Date().getTime());
+
+      return url + '?' + param.join('&');
+    }
+  }, {
+    // Path constants.
+    APPDATA_API: 'appdata',
+    USER_API: 'user'
+  });
+
+  // Apply mixin.
+  Xhr.call(Kinvey.Store.AppData.prototype);
 
 }.call(this));
