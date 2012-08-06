@@ -349,7 +349,7 @@
    * 
    * @constant
    */
-  Kinvey.SDK_VERSION = '0.9.7';
+  Kinvey.SDK_VERSION = '0.9.8';
 
   /**
    * Returns current user, or null if not set.
@@ -1759,6 +1759,24 @@
     },
 
     /**
+     * Sets a not in condition on the current key.
+     * 
+     * @example <code>
+     * // Attribute "field" must have a value starting with foo.
+     * var query = new Kinvey.Query();
+     * query.on('field').regex(/^foo/);
+     * </code>
+     * 
+     * @param {object} expected Regular expression.
+     * @throws {Error} On invalid regular expression.
+     * @return {Kinvey.Query} Current instance.
+     */
+    regex: function(expected) {
+      this._set(Kinvey.Query.REGEX, expected);
+      return this;
+    },
+
+    /**
      * Resets all filters.
      * 
      * @return {Kinvey.Query} Current instance.
@@ -1987,6 +2005,14 @@
      */
     NOT_EQUAL: 22,
 
+    /**
+     * Regular expression operator. Checks if an element matches the specified
+     * expression.
+     * 
+     * @constant
+     */
+    REGEX: 23,
+
     // Geoqueries.
     /**
      * Near sphere operator. Checks if an element is close to the point in
@@ -2156,6 +2182,12 @@
           break;
         case Kinvey.Query.NOT_EQUAL:
           this._set(field, {$ne: value});
+          break;
+        case Kinvey.Query.REGEX:
+          // Filter through RegExp, this will throw an error on invalid regex.
+          var regex = new RegExp(value);
+          var options = ((regex.global) ? 'g' : '') + ((regex.ignoreCase) ? 'i' : '') + ((regex.multiline) ? 'm' : '');
+          this._set(field, { $regex: regex.source, $options: options });
           break;
 
         // Geoqueries.
