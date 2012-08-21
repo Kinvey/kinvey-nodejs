@@ -349,7 +349,7 @@
    * 
    * @constant
    */
-  Kinvey.SDK_VERSION = '0.9.8';
+  Kinvey.SDK_VERSION = '0.9.9';
 
   /**
    * Returns current user, or null if not set.
@@ -485,6 +485,9 @@
     USER_ALREADY_EXISTS: 'UserAlreadyExists',
 
     /** @constant */
+    USER_UNAVAILABLE: 'UserUnavailable',
+
+    /** @constant */
     DUPLICATE_END_USERS: 'DuplicateEndUsers',
 
     /** @constant */
@@ -536,7 +539,13 @@
     API_VERSION_NOT_IMPLEMENTED: 'APIVersionNotImplemented',
 
     /** @constant */
-    API_VERSION_NOT_AVAILABLE: 'APIVersionNotAvailable'
+    API_VERSION_NOT_AVAILABLE: 'APIVersionNotAvailable',
+
+    /** @constant */
+    INPUT_VALIDATION_FAILED: 'InputValidationFailed',
+
+    /** @constant */
+    BLruntimeError: 'BLruntimeError'
   };
 
   // Define the Kinvey Entity class.
@@ -841,6 +850,7 @@
       aggregation.setReduce(function(doc, out) {
         out.count += 1;
       });
+      aggregation.setQuery(this.query);// Apply query.
 
       this.store.aggregate(aggregation.toJSON(), merge(options, {
         success: function(response, info) {
@@ -997,11 +1007,12 @@
       }, merge(options, {
         success: bind(this, function(response, info) {
           // Extract token.
-          this._login(response._kmd.authtoken);
+          var token = response._kmd.authtoken;
           delete response._kmd.authtoken;
 
           // Update attributes. This does not include the users password.
           this.attr = response;
+          this._login(token);
 
           options.success && options.success(this, info);
         })
@@ -1144,13 +1155,13 @@
       // Create a new user.
       var user = new Kinvey.User(attr);
       Kinvey.Entity.prototype.save.call(user, merge(options, {
-        success: bind(user, function() {
-          // Unset the password, we don't need it any more.
-          var password = this.get(this.ATTR_PASSWORD);
-          this.unset(this.ATTR_PASSWORD);
+        success: bind(user, function(_, info) {
+          // Extract token.
+          var token = this.attr._kmd.authtoken;
+          delete this.attr._kmd.authtoken;
+          this._login(token);
 
-          // Login the created user.
-          this.login(this.getUsername(), password, options);
+          options.success && options.success(this, info);
         })
       }));
       return user;// return the instance
@@ -1215,16 +1226,17 @@
      * @name Kinvey.UserCollection
      * @constructor
      * @extends Kinvey.Collection
-     * @param {Kinvey.Query} [query] Query.
+     * @param {Object} options Options.
      */
-    constructor: function(query) {
-      Kinvey.Collection.prototype.constructor.call(this, 'user', query);
+    constructor: function(options) {
+      Kinvey.Collection.prototype.constructor.call(this, 'user', options);
     },
 
     /** @lends Kinvey.UserCollection# */
 
     /**
-     * Clears collection. This action is not allowed.
+     * Clears collection. This action is not allowed, not even by the master
+     * secret.
      * 
      * @override
      */

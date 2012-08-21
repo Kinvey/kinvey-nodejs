@@ -58,7 +58,7 @@ At a later stage, you might want to retrieve all books written by a certain auth
 ```js
 // First, build a query to match the author.
 var query = new Kinvey.Query();
-query.on('author').equals('Robert Kennedy');
+query.on('author').equal('Robert Kennedy');
 
 // Create a collection, and pass in the query.
 var bookCollection = new Kinvey.Collection('book', { query: query });
