@@ -218,6 +218,7 @@
         'X-Kinvey-Device-Information': this._getDeviceInfo()
       };
       body && (headers['Content-Type'] = 'application/json; charset=utf-8');
+      Kinvey.masterSecret && (headers['X-Kinvey-Master-Create-User'] = true);
 
       // Execute request.
       this._xhr(method, url, body, merge(options, {
@@ -335,7 +336,7 @@
    * 
    * @constant
    */
-  Kinvey.API_VERSION = 1;
+  Kinvey.API_VERSION = 2;
 
   /**
    * Host.
@@ -349,7 +350,7 @@
    * 
    * @constant
    */
-  Kinvey.SDK_VERSION = '0.9.9';
+  Kinvey.SDK_VERSION = '0.9.10';
 
   /**
    * Returns current user, or null if not set.
@@ -543,7 +544,7 @@
 
     /** @constant */
     INPUT_VALIDATION_FAILED: 'InputValidationFailed',
-
+    
     /** @constant */
     BLruntimeError: 'BLruntimeError'
   };
@@ -552,6 +553,9 @@
   Kinvey.Entity = Base.extend({
     // Identifier attribute.
     ATTR_ID: '_id',
+
+    // Map.
+    map: {},
 
     /**
      * Creates a new entity.
@@ -572,13 +576,19 @@
       if(null == collection) {
         throw new Error('Collection must not be null');
       }
-      this.attr = attr || {};
       this.collection = collection;
       this.metadata = null;
 
       // Options.
       options || (options = {});
-      this.store = Kinvey.Store.factory(collection, options.store, options.options);
+      this.store = Kinvey.Store.factory(options.store, this.collection, options.options);
+      options.map && (this.map = options.map);
+
+      // Parse attributes.
+      this.attr = attr ? this._parseAttr(attr) : {};
+
+      // State (used by save()).
+      this._pending = false;
     },
 
     /** @lends Kinvey.Entity# */
@@ -662,7 +672,7 @@
 
       this.store.query(id, merge(options, {
         success: bind(this, function(response, info) {
-          this.attr = response;
+          this.attr = this._parseAttr(response);
           this.metadata = null;// Reset.
           options.success && options.success(this, info);
         })
@@ -678,13 +688,49 @@
      */
     save: function(options) {
       options || (options = {});
-      this.store.save(this.toJSON(), merge(options, {
-        success: bind(this, function(response, info) {
-          this.attr = response;
-          this.metadata = null;// Reset.
-          options.success && options.success(this, info);
-        })
-      }));
+
+      // Refuse to save circular references.
+      if(this._pending && options._ref) {
+        this._pending = false;// Reset.
+        options.error({
+          error: Kinvey.Error.OPERATION_DENIED,
+          message: 'Circular reference detected, aborting save',
+          debug: ''
+        }, {});
+        return;
+      }
+      this._pending = true;
+
+      // Save children first.
+      this._saveAttr(this.attr, {
+        success: bind(this, function(references) {
+          // All children are saved, save parent.
+          this.store.save(this.toJSON(), merge(options, {
+            success: bind(this, function(response, info) {
+              this._pending = false;// Reset.
+
+              // Merge response with response of children.
+              this.attr = merge(this._parseAttr(response), references);
+              this.metadata = null;// Reset.
+
+              options.success && options.success(this, info);
+            }),
+            error: bind(this, function(error, info) {
+              this._pending = false;// Reset.
+              options.error && options.error(error, info);
+            })
+          }));
+        }),
+
+        // One of the children failed, break on error.
+        error: bind(this, function(error, info) {
+          this._pending = false;// Reset.
+          options.error && options.error(error, info);
+        }),
+
+        // Flag to detect any circular references. 
+        _ref: true
+      });
     },
 
     /**
@@ -698,7 +744,7 @@
       if(null == key) {
         throw new Error('Key must not be null');
       }
-      this.attr[key] = value;
+      this.attr[key] = this._parse(key, value);
     },
 
     /**
@@ -732,12 +778,10 @@
      * 
      * @returns {Object} JSON representation.
      */
-    toJSON: function() {
-      var result = this.attr;
-
-      // Add ACL metadata.
+    toJSON: function(name) {
+      // Flatten references.
+      var result = this._flattenAttr(this.attr);// Copy by value.
       this.metadata && (result._acl = this.metadata.toJSON()._acl);
-
       return result;
     },
 
@@ -748,6 +792,168 @@
      */
     unset: function(key) {
       delete this.attr[key];
+    },
+
+    /**
+     * Flattens attribute value.
+     * 
+     * @private
+     * @param {*} value Attribute value.
+     * @returns {*}
+     */
+    _flatten: function(value) {
+      if(value instanceof Object) {
+        if(value instanceof Kinvey.Entity) {// Case 1: value is a reference.
+          value = {
+            _type: 'KinveyRef',
+            _collection: value.collection,
+            _id: value.getId()
+          };
+        }
+        else if(value instanceof Array) {// Case 2: value is an array.
+          // Flatten all members.
+          value = value.map(bind(this, function(x) {
+            return this._flatten(x);
+          }));
+        }
+        else {
+          value = this._flattenAttr(value);// Case 3: value is an object.
+        }
+      }
+      return value;
+    },
+
+    /**
+     * Flattens attributes.
+     * 
+     * @private
+     * @param {Object} attr Attributes.
+     * @returns {Object} Flattened attributes.
+     */
+    _flattenAttr: function(attr) {
+      var result = {};
+      Object.keys(attr).forEach(bind(this, function(name) {
+        result[name] = this._flatten(attr[name]);
+      }));
+      return result;
+    },
+
+    /**
+     * Parses references in name/value pair.
+     * 
+     * @private
+     * @param {string} name Attribute name.
+     * @param {*} value Attribute value.
+     * @returns {*} Parsed value.
+     */
+    _parse: function(name, value) {
+      if(value instanceof Object) {
+        if(value instanceof Kinvey.Entity) { }// Skip.
+        else if('KinveyRef' === value._type) {// Case 1: value is a reference.
+          // Create object from reference if embedded, otherwise skip.
+          if(value._obj) {
+            var Entity = this.map[name] || Kinvey.Entity;// Use mapping if defined.
+
+            // Maintain store type and configuration.
+            var opts = { store: this.store.type, options: this.store.options };
+            value = new Entity(value._obj, value._collection, opts);
+          }
+        }
+        else if(value instanceof Array) {// Case 2: value is an array.
+          // Loop through and parse all members.
+          value = value.map(bind(this, function(x) {
+            return this._parse(name, x);
+          }));
+        }
+        else {// Case 3: value is an object.
+          value = this._parseAttr(value, name);
+        }
+      }
+      return value;
+    },
+
+    /**
+     * Parses references in attributes.
+     * 
+     * @private
+     * @param {Object} attr Attributes.
+     * @param {string} [prefix] Name prefix.
+     * @return {Object} Parsed attributes.
+     */
+    _parseAttr: function(attr, prefix) {
+      var result = merge(attr);// Copy by value.
+      Object.keys(attr).forEach(bind(this, function(name) {
+        result[name] = this._parse((prefix ? prefix + '.' : '') + name, attr[name]);
+      }));
+      return result;
+    },
+    
+    /**
+     * Saves an attribute value.
+     * 
+     * @private
+     * @param {*} value Attribute value.
+     * @param {Object} options Options.
+     */
+    _save: function(value, options) {
+      if(value instanceof Object) {
+        if(value instanceof Kinvey.Entity) {// Case 1: value is a reference.
+          // Only save when authorized, otherwise just return. Note any writable
+          // children are not saved if the parent is not writable.
+          return value.getMetadata().hasWritePermissions() ? value.save(options) : options.success(value); 
+        }
+        if(value instanceof Array) {// Case 2: value is an array.
+          // Save every element in the array (serially), and update in place.
+          var i = 0;
+
+          // Define save handler.
+          var save = bind(this, function() {
+            var item = value[i];
+            item ? this._save(item, merge(options, {
+              success: function(response) {
+                value[i++] = response;// Update.
+                save();// Advance.
+              }
+            })) : options.success(value);
+          });
+
+          // Trigger.
+          return save();
+        }
+
+        // Case 3: value is an object.
+        return this._saveAttr(value, options);
+      }
+
+      // Case 4: value is a scalar.
+      options.success(value);
+    },
+
+    /**
+     * Saves attributes.
+     * 
+     * @private
+     * @param {Object} attr Attributes.
+     * @param {Object} options Options.
+     */
+    _saveAttr: function(attr, options) {
+      // Save attributes serially.
+      var attrs = Object.keys(attr);
+      var i = 0;
+
+      // Define save handler.
+      var save = bind(this, function() {
+        var name = attrs[i++];
+        name ? this._save(attr[name], merge(options, {
+          success: function(response) {
+            attr[name] = response;// Update.
+            save();// Advance.
+          }
+        })) : options.success(attr);
+      });
+
+      // Trigger.
+      save();
     }
   });
 
@@ -785,7 +991,7 @@
       // Options.
       options || (options = {});
       this.setQuery(options.query || new Kinvey.Query());
-      this.store = Kinvey.Store.factory(this.name, options.store, options.options);
+      this.store = Kinvey.Store.factory(options.store, this.name, options.options);
     },
 
     /** @lends Kinvey.Collection# */
@@ -874,7 +1080,9 @@
         success: bind(this, function(response, info) {
           this.list = [];
           response.forEach(bind(this, function(attr) {
-            this.list.push(new this.entity(attr, this.name, { store: this.store }));
+            // Maintain collection store type and configuration.
+            var opts = { store: this.store.name, options: this.store.options };
+            this.list.push(new this.entity(attr, this.name, opts));
           }));
           options.success && options.success(this.list, info);
         })
@@ -948,6 +1156,15 @@
     },
 
     /**
+     * Returns social identity, or null if not set.
+     * 
+     * @return {Object} Identity.
+     */
+    getIdentity: function() {
+      return this.get('_socialIdentity');
+    },
+
+    /**
      * Returns token, or null if not set.
      * 
      * @return {string} Token.
@@ -987,34 +1204,40 @@
      * @param {function(error, info)} [options.error] Failure callback.
      */
     login: function(username, password, options) {
-      options || (options = {});
-
-      // Make sure only one user is active at the time.
-      var currentUser = Kinvey.getCurrentUser();
-      if(null !== currentUser) {
-        currentUser.logout(merge(options, {
-          success: bind(this, function() {
-            this.login(username, password, options);
-          })
-        }));
-        return;
-      }
-
-      // Send request.
-      this.store.login({
+      this._doLogin({
         username: username,
         password: password
-      }, merge(options, {
-        success: bind(this, function(response, info) {
-          // Extract token.
-          var token = response._kmd.authtoken;
-          delete response._kmd.authtoken;
+      }, options || {});
+    },
 
-          // Update attributes. This does not include the users password.
-          this.attr = response;
-          this._login(token);
+    /**
+     * Logs in user given a Facebook oAuth token.
+     * 
+     * @param {string} token oAuth token.
+     * @param {Object} [attr] User attributes.
+     * @param {Object} [options]
+     * @param {function(entity, info)} [options.success] Success callback.
+     * @param {function(error, info)} [options.error] Failure callback.
+     */
+    loginWithFacebook: function(token, attr, options) {
+      attr || (attr = {});
+      attr._socialIdentity = { facebook: { access_token: token } };
+      options || (options = {});
 
-          options.success && options.success(this, info);
+      // Login, or create when there is no user with this Facebook identity.
+      this._doLogin(attr, merge(options, {
+        error: bind(this, function(error, info) {
+          // If user could not be found, register.
+          if(Kinvey.Error.USER_NOT_FOUND === error.error) {
+            // Pass current instance as (private) option to create.
+            this.attr = attr;// Required as we set a specific target below.
+            return Kinvey.User.create(attr, merge(options, {
+              _target: this
+            }));
+          }
+
+          // Something else went wrong (invalid token?), error out.
+          options.error && options.error(error, info);
         })
       }));
     },
@@ -1032,6 +1255,7 @@
       // Make sure we only logout the current user.
       if(!this.isLoggedIn) {
         options.success && options.success({});
+        return;
       }
       this.store.logout({}, merge(options, {
         success: bind(this, function(_, info) {
@@ -1077,6 +1301,41 @@
     },
 
     /**
+     * Performs login.
+     * 
+     * @private
+     * @param {Object} attr Attributes.
+     * @param {Object} options Options.
+     */
+    _doLogin: function(attr, options) {
+      // Make sure only one user is active at the time.
+      var currentUser = Kinvey.getCurrentUser();
+      if(null !== currentUser) {
+        currentUser.logout(merge(options, {
+          success: bind(this, function() {
+            this._doLogin(attr, options);
+          })
+        }));
+        return;
+      }
+
+      // Send request.
+      this.store.login(attr, merge(options, {
+        success: bind(this, function(response, info) {
+          // Extract token.
+          var token = response._kmd.authtoken;
+          delete response._kmd.authtoken;
+
+          // Update attributes. This does not include the users password.
+          this.attr = this._parseAttr(response);
+          this._login(token);
+
+          options.success && options.success(this, info);
+        })
+      }));
+    },
+
+    /**
      * Marks user as logged in. This method should never be called standalone,
      * but always involve some network request.
      * 
@@ -1084,10 +1343,13 @@
      * @param {string} token Token.
      */
     _login: function(token) {
-      Kinvey.setCurrentUser(this);
-      this.isLoggedIn = true;
-      this.token = token;
-      this._saveToDisk();
+      // The master secret does not need a current user.
+      if(null == Kinvey.masterSecret) {
+        Kinvey.setCurrentUser(this);
+        this.isLoggedIn = true;
+        this.token = token;
+        this._saveToDisk();
+      }
     },
 
     /**
@@ -1096,10 +1358,13 @@
      * @private
      */
     _logout: function() {
-      Kinvey.setCurrentUser(null);
-      this.isLoggedIn = false;
-      this.token = null;
-      this._deleteFromDisk();
+      // The master secret does not need a current user.
+      if(null == Kinvey.masterSecret) {
+        Kinvey.setCurrentUser(null);
+        this.isLoggedIn = false;
+        this.token = null;
+        this._deleteFromDisk();
+      }
     },
 
     /**
@@ -1153,7 +1418,7 @@
       }
 
       // Create a new user.
-      var user = new Kinvey.User(attr);
+      var user = options._target || new Kinvey.User(attr);
       Kinvey.Entity.prototype.save.call(user, merge(options, {
         success: bind(user, function(_, info) {
           // Extract token.
@@ -1235,8 +1500,7 @@
     /** @lends Kinvey.UserCollection# */
 
     /**
-     * Clears collection. This action is not allowed, not even by the master
-     * secret.
+     * Clears collection. This action is not allowed.
      * 
      * @override
      */
@@ -1313,16 +1577,17 @@
      * is only useful when the class is created with a predefined
      * ACL.
      * 
-     * @returns {Boolean}
+     * @returns {boolean}
      */
     isOwner: function() {
       var owner = this.acl.creator;
       var currentUser = Kinvey.getCurrentUser();
 
-      if(owner && currentUser) {
-        return owner === currentUser.getId();
+      // If owner is undefined, assume entity is just created.
+      if(owner) {
+        return !!currentUser && owner === currentUser.getId();
       }
-      return false;
+      return true;
     },
 
     /**
@@ -1427,6 +1692,58 @@
       };
     }
   });
+
+  /**
+   * Kinvey Resource namespace definition.
+   * 
+   * @namespace
+   */
+  Kinvey.Resource = {
+    /**
+     * Destroys a file.
+     * 
+     * @param {string} name Filename.
+     * @param {Object} [options] Options.
+     */
+    destroy: function(name, options) {
+      Kinvey.Resource._store || (Kinvey.Resource._store = Kinvey.Store.factory(Kinvey.Store.BLOB));
+      Kinvey.Resource._store.remove({ name: name }, options);
+    },
+
+    /**
+     * Downloads a file, or returns the download URI.
+     * 
+     * @param {string} name Filename.
+     * @param {Object} [options] Options.
+     */
+    download: function(name, options) {
+      Kinvey.Resource._store || (Kinvey.Resource._store = Kinvey.Store.factory(Kinvey.Store.BLOB));
+      Kinvey.Resource._store.query(name, options);
+    },
+
+    /**
+     * Uploads a file.
+     * 
+     * @param {Object} file File.
+     * @param {Object} [options] Options.
+     * @throws {Error} On invalid file.
+     */
+    upload: function(file, options) {
+      // Validate file.
+      if(null == file || null == file.name || null == file.data) {
+        throw new Error('File should be an object containing name and data');
+      }
+      Kinvey.Resource._store || (Kinvey.Resource._store = Kinvey.Store.factory(Kinvey.Store.BLOB));
+      Kinvey.Resource._store.save(file, options);
+    },
+
+    /**
+     * We only need one instance of the blob store.
+     * 
+     * @private
+     */
+    _store: null
+  };
 
   // Define the Kinvey Query class.
   Kinvey.Query = Base.extend({
@@ -2544,22 +2861,24 @@
     APPDATA: 'appdata',
 
     /**
+     * Blob store.
+     * 
+     * @constant
+     */
+    BLOB: 'blob',
+
+    /**
      * Returns store.
      * 
+     * @param {string} name Store name.
      * @param {string} collection Collection name.
-     * @param {Object|string} name Store, or store name.
      * @param {Object} options Store options.
-     * @throws {Error} On invalid store instance.
      * @return {Kinvey.Store.*} One of Kinvey.Store.*.
      */
-    factory: function(collection, name, options) {
-      // Name could be a store instance already. Do a simple check to see
-      // whether collection name matches the target collection.
-      if(name instanceof Object) {
-        if(collection !== name.collection) {
-          throw new Error('Store collection does not match targeted collection');
-        }
-        return name;
+    factory: function(name, collection, options) {
+      // Create store by name.
+      if(Kinvey.Store.BLOB === name) {
+        return new Kinvey.Store.Blob(collection, options);
       }
 
       // By default, use the AppData store.
@@ -2569,6 +2888,9 @@
 
   // Define the Kinvey.Store.AppData class.
   Kinvey.Store.AppData = Base.extend({
+    // Store name.
+    name: Kinvey.Store.APPDATA,
+
     // Default options.
     options: {
       timeout: 10000,// Timeout in ms.
@@ -2650,7 +2972,9 @@
      * @param {Object} [options] Options.
      */
     query: function(id, options) {
-      var url = this._getUrl({ id: id });
+      options || (options = {});
+
+      var url = this._getUrl({ id: id, resolve: options.resolve });
       this._send('GET', url, null, options);
     },
 
@@ -2661,7 +2985,9 @@
      * @param {Object} [options] Options.
      */
     queryWithQuery: function(query, options) {
-      var url = this._getUrl({ query: query });
+      options || (options = {});
+
+      var url = this._getUrl({ query: query, resolve: options.resolve });
       this._send('GET', url, null, options);
     },
 
@@ -2743,6 +3069,11 @@
         parts.query.sort && param.push('sort=' + this._encode(parts.query.sort));
       }
 
+      // Resolve references.
+      if(parts.resolve) {
+        param.push('resolve=' + parts.resolve.join(','));
+      }
+
       // Android < 4.0 caches all requests aggressively. For now, work around
       // by adding a cache busting query string.
       param.push('_=' + new Date().getTime());
@@ -2757,5 +3088,183 @@
 
   // Apply mixin.
   Xhr.call(Kinvey.Store.AppData.prototype);
+
+  // Define the Kinvey.Store.Blob class.
+  Kinvey.Store.Blob = Base.extend({
+    // Store name.
+    name: Kinvey.Store.BLOB,
+
+    // Default options.
+    options: {
+      timeout: 10000,// Timeout in ms.
+
+      success: function() { },
+      error: function() { }
+    },
+
+    /**
+     * Creates a new store.
+     * 
+     * @name Kinvey.Store.Blob
+     * @constructor
+     * @param {string} collection Collection name.
+     * @param {Object} [options] Options.
+     */
+    constructor: function(collection, options) {
+      // Ignore the collection name, as the blob API has only one collection.
+      options && this.configure(options);
+    },
+
+    /** @lends Kinvey.Store.Blob# */
+
+    /**
+     * Configures store.
+     * 
+     * @param {Object} options
+     * @param {function(response, info)} [options.success] Success callback.
+     * @param {function(error, info)} [options.error] Failure callback.
+     * @param {integer} [options.timeout] Request timeout (in milliseconds).
+     */
+    configure: function(options) {
+      'undefined' !== typeof options.timeout && (this.options.timeout = options.timeout);
+      options.success && (this.options.success = options.success);
+      options.error && (this.options.error = options.error);
+    },
+
+    /**
+     * Downloads a file.
+     * 
+     * @param {string} name Filename.
+     * @param {Object} [options] Options.
+     */
+    query: function(name, options) {
+      options = this._options(options);
+
+      // Send request to obtain the download URL.
+      var url = this._getUrl('download-loc', name);
+      this._send('GET', url, null, merge(options, {
+        success: bind(this, function(response, info) {
+          // Stop here if the user wants us to.
+          if('undefined' !== typeof options.download && !options.download) {
+            return options.success(response, info);
+          }
+
+          // Otherwise, download the file.
+          this._xhr('GET', response.URI, null, merge(options, {
+            success: function(response, info) {
+              options.success({
+                name: name,
+                data: response
+              }, info);
+            },
+            error: function(_, info) {
+              options.error({
+                error: Kinvey.Error.RESPONSE_PROBLEM,
+                description: 'There was a problem downloading the file.',
+                debug: ''
+              }, info);
+            }
+          }));
+        })
+      }));
+    },
+
+    /**
+     * Removes a file.
+     * 
+     * @param {Object} file File to be removed.
+     * @param {Object} [options] Options.
+     * @throws {Error} On invalid file.
+     */
+    remove: function(file, options) {
+      // Validate file.
+      if(null == file || null == file.name) {
+        throw new Error('File should be an object containing name');
+      }
+      options = this._options(options);
+
+      // Send request to obtain the delete URL.
+      var url = this._getUrl('remove-loc', file.name);
+      this._send('GET', url, null, merge(options, {
+        success: bind(this, function(response, info) {
+          // Delete the file.
+          this._xhr('DELETE', response.URI, null, merge(options, {
+            success: function(_, info) {
+              options.success && options.success(null, info);
+            },
+            error: function(_, info) {
+              options.error({
+                error: Kinvey.Error.RESPONSE_PROBLEM,
+                description: 'There was a problem deleting the file.',
+                debug: ''
+              }, info);
+            }
+          }));
+        })
+      }));
+    },
+
+    /**
+     * Uploads a file.
+     * 
+     * @param {Object} file File to be uploaded.
+     * @param {Object} [options] Options.
+     */
+    save: function(file, options) {
+      options = this._options(options);
+
+      // Send request to obtain the upload URL.
+      this._send('GET', this._getUrl('upload-loc', file.name), null, merge(options, {
+        success: bind(this, function(response, info) {
+          // Upload the file.
+          this._xhr('PUT', response.URI, file.data, merge(options, {
+            success: function(_, info) {
+              options.success(file, info);
+            },
+            error: function(_, info) {
+              options.error({
+                error: Kinvey.Error.RESPONSE_PROBLEM,
+                description: 'There was a problem uploading the file.',
+                debug: ''
+              }, info);
+            }
+          }));
+        })
+      }));
+    },
+
+    /**
+     * Constructs URL.
+     * 
+     * @private
+     * @param {string} type One of download-loc, upload-loc or remove-loc.
+     * @param {string} filename Filename.
+     * @return {string} URL.
+     */
+    _getUrl: function(type, filename) {
+      return '/' + Kinvey.Store.Blob.BLOB_API + '/' + Kinvey.appKey + '/' + type + '/' + filename;
+    },
+
+    /**
+     * Returns full options object.
+     * 
+     * @private
+     * @param {Object} options Options.
+     * @return {Object} Options.
+     */
+    _options: function(options) {
+      options || (options = {});
+      'undefined' !== typeof options.timeout || (options.timeout = this.options.timeout);
+      options.success || (options.success = this.options.success);
+      options.error || (options.error = this.options.error);
+      return options;
+    }
+  }, {
+    // Path constants.
+    BLOB_API: 'blob'
+  });
+
+  // Apply mixin.
+  Xhr.call(Kinvey.Store.Blob.prototype);
 
 }.call(this));
