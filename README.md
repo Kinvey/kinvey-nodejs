@@ -1,80 +1,69 @@
 # Kinvey
+[Kinvey](http://www.kinvey.com) (pronounced Kin-vey, like convey) makes it ridiculously easy for developers to setup, use and operate a cloud backend for their mobile apps. They don't have to worry about connecting to various cloud services, setting up servers for their backend, or maintaining and scaling them.
 
-Kinvey JavaScript Library for Node.js. Kinvey is a Backend as a Service platform that makes it ridiculously easy for developers to setup and operate backends for their mobile, tablet and web apps.
+This node module makes it very easy to connect your Node.js app with Kinvey.
 
 ## How to use
 
 ### 1. Sign up for Kinvey
 To use the library, sign up for Kinvey if you have not already done so. Go to the [sign up](https://console.kinvey.com/#signup) page, and follow the steps provided.
 
-### 2. Install the library
-You can setup the library in two ways. You can either install the module directly through `npm`:
+### 2. Add the library
+You can add the library in three ways. The recommended way to add the module to your project is adding a dependency to `package.json`:
 
-	npm install kinvey
+```javascript
+{
+  ...
+  "dependencies": {
+    "kinvey": "~0.9"
+    ...
+  }
+  ...
+}
+```
 
-Or alternatively, clone the repository and create a symbolic link to the module:
+The module will be installed when updating your project:
+
+```bash
+npm update
+```
+
+Alternatively, you can install the module directly from the command line:
+
+```bash
+npm install kinvey
+```
+
+Finally, you can also clone the repository and create a symbolic link to the module:
 
 	git clone git@github.com:Kinvey/kinvey-nodejs.git
 	cd kinvey-nodejs
 	npm link
 
-Now, the library is available for use in your project. Use `require` to import the library. `require` will return the Kinvey namespace.
+### 3. Configure the library
+Now, the library is available for use in your project. Import the library in your code using `require`. Next, use `Kinvey.init` to configure your app:
 
-```js
+```javascript
 var Kinvey = require('kinvey');
-```
-
-### 3. Initialize the library
-
-Once you have imported the library, it is time to initialize it. To do so, you’ll need the `App Key` and `App Secret` of your application. You can find these keys when you click on an the application in the console.
-
-```js
 Kinvey.init({
-  appKey: '<your-app-key>',
-  appSecret: '<your-app-secret>'
+    appKey: 'your-app-key',
+    appSecret: 'your-app-secret'
 });
 ```
 
-### 4. Use it
-As a first example, we will show you how to save an item on Kinvey. The following code snippet saves a book. We use the first parameter of `Kinvey.Entity` to specify in which collection we want to save this book.
+### 4. Verify Set Up
+You can use the following snippet to verify the app credentials were entered correctly. This function will contact the backend and verify that the library can communicate with your app.
 
-```js
-var book = new Kinvey.Entity({
-  title: 'Awesome Arms',
-  author: 'Robert Kennedy'
-}, 'book');
-book.save({
-  success: function(response) {
-    // response is the book object.
-  },
-  error: function(error) {
-    // error contains a error and description field indicating what exactly went wrong.
-  }
-});
-```
-
-At a later stage, you might want to retrieve all books written by a certain author. Therefore, you can use the `Kinvey.Collection` class.
-
-```js
-// First, build a query to match the author.
-var query = new Kinvey.Query();
-query.on('author').equal('Robert Kennedy');
-
-// Create a collection, and pass in the query.
-var bookCollection = new Kinvey.Collection('book', { query: query });
-bookCollection.fetch({
-  success: function(list) {
-    // list is an array of books written by Kennedy.
-  },
-  error: function(error) {
-    // error contains a error and description field indicating what exactly went wrong.
-  }
+```javascript
+Kinvey.ping({
+    success: function(response) {
+        console.log('Kinvey Ping Success. Kinvey Service is alive, version: ' + response.version + ', response: ' + response.kinvey);
+    },
+    error: function(error) {
+        console.log('Kinvey Ping Failed. Response: ' + error.description);
+    }
 });
 ```
 
 ## What’s next?
-The example shown above only shows a very small subset of all features the library offers. To learn more:
-
-* Read about our APIs in the [JavaScript Developer’s Guide](http://docs.kinvey.com/js-developers-guide.html)
-* Try saving and loading data using the [JavaScript Appdata API](http://docs.kinvey.com/js-developers-guide.html#appdata)
-* Consult the [JavaScript API Docs](http://docs.kinvey.com/js-api-reference.html) for detailed information on all available methods
+You are now ready to start building your awesome apps! Next we recommend diving into the [User guide](http://devcenter.kinvey.com/nodejs/guides/users) or [Data store guide](http://devcenter.kinvey.com/nodejs/guides/datastore) to learn more about our service, or explore the [sample apps](http://devcenter.kinvey.com/nodejs/samples) to go straight to working projects.
