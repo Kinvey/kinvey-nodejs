@@ -150,7 +150,7 @@
      */
     var getAuth = function(forceAppc) {
       // Use master secret if specified.
-      if(null !== Kinvey.masterSecret) {// undefined or null
+      if(null != Kinvey.masterSecret) {// undefined or null
         return 'Basic ' + this._base64(Kinvey.appKey + ':' + Kinvey.masterSecret);
       }
 
@@ -172,9 +172,9 @@
      * @return {string} Device information.
      */
     var getDeviceInfo = function() {
-      // Example: "js-node/0.9.11 linux-node v0.6.13 0".
+      // Example: "js-node/0.9.12 linux-node v0.6.13 0".
       return [
-        'js-node/0.9.11',
+        'js-node/0.9.12',
         process.platform + '-' + process.title,
         process.version,
         0// always set device ID to 0.
@@ -276,7 +276,8 @@
       options.error || (options.error = this.options.error);
 
       // Add Content-Length header.
-      options.headers['Content-Length'] = body ? body.length : 0;
+      // @link http://nodejs.org/api/buffer.html#buffer_class_method_buffer_bytelength_string_encoding
+      options.headers['Content-Length'] = body ? Buffer.byteLength(body, 'utf8') : 0;
 
       // Create request.
       var path = nodeUrl.parse(url);
@@ -352,7 +353,7 @@
    * 
    * @constant
    */
-  Kinvey.SDK_VERSION = '0.9.11';
+  Kinvey.SDK_VERSION = '0.9.12';
 
   /**
    * Returns current user, or null if not set.
@@ -560,6 +561,9 @@
     STALE_REQUEST: 'StaleRequest'
   };
 
+  // Assign unique id to every object, so we can save circular references.
+  var objectId = 0;
+
   // Define the Kinvey Entity class.
   Kinvey.Entity = Base.extend({
     // Identifier attribute.
@@ -587,19 +591,17 @@
       if(null == collection) {
         throw new Error('Collection must not be null');
       }
+      this.attr = attr || {};
       this.collection = collection;
       this.metadata = null;
 
       // Options.
       options || (options = {});
-      this.store = Kinvey.Store.factory(options.store, this.collection, options.options);
       options.map && (this.map = options.map);
+      this.store = Kinvey.Store.factory(options.store, this.collection, options.options);
 
-      // Parse attributes.
-      this.attr = attr ? this._parseAttr(attr) : {};
-
-      // State (used by save()).
-      this._pending = false;
+      // Assign object id.
+      this.__objectId = ++objectId;
     },
 
     /** @lends Kinvey.Entity# */
@@ -613,7 +615,7 @@
      */
     destroy: function(options) {
       options || (options = {});
-      this.store.remove(this.toJSON(), merge(options, {
+      this.store.remove(this.toJSON(true), merge(options, {
         success: bind(this, function(_, info) {
           options.success && options.success(this, info);
         })
@@ -683,7 +685,11 @@
 
       this.store.query(id, merge(options, {
         success: bind(this, function(response, info) {
-          this.attr = this._parseAttr(response);
+          // Maintain collection store type and configuration.
+          var opts = { store: this.store.name, options: this.store.options };
+
+          // Resolve references, and update attributes.
+          this.attr = Kinvey.Entity._resolve(this.map, response, options.resolve, opts);
           this.metadata = null;// Reset.
           options.success && options.success(this, info);
         })
@@ -700,48 +706,41 @@
     save: function(options) {
       options || (options = {});
 
-      // Refuse to save circular references.
-      if(this._pending && options._ref) {
-        this._pending = false;// Reset.
-        options.error({
-          error: Kinvey.Error.BAD_REQUEST,
-          message: 'Circular reference detected, aborting save',
-          debug: ''
-        }, {});
-        return;
-      }
-      this._pending = true;
-
-      // Save children first.
-      this._saveAttr(this.attr, {
-        success: bind(this, function(references) {
-          // All children are saved, save parent.
-          this.store.save(this.toJSON(), merge(options, {
+      // Save references first, then save original.
+      this._saveReferences(merge(options, {
+        success: bind(this, function(outAttr) {
+          this.store.save(this.toJSON(true), merge(options, {
             success: bind(this, function(response, info) {
-              this._pending = false;// Reset.
+              // Replace flat references with real objects. outAttr is an
+              // array containing fields to replace with the replacement object.
+              while(outAttr[0]) {
+                var resolve = outAttr.shift();
+                var segments = resolve.attr.split('.');
+                var doc = response;
 
-              // Merge response with response of children.
-              this.attr = merge(this._parseAttr(response), references);
+                // Descent in doc and look for segment.
+                while(segments[0]) {
+                  var field = segments.shift();
+
+                  // If the path is not fully traversed, continue.
+                  if(segments[0]) {
+                    doc = doc[field];
+                  }
+                  else {// Replace field value with replacement object.
+                    doc[field] = resolve.obj;
+                  }
+                }
+              }
+
+              // Update attributes.
+              this.attr = response;
               this.metadata = null;// Reset.
-
               options.success && options.success(this, info);
-            }),
-            error: bind(this, function(error, info) {
-              this._pending = false;// Reset.
-              options.error && options.error(error, info);
             })
           }));
         }),
-
-        // One of the children failed, break on error.
-        error: bind(this, function(error, info) {
-          this._pending = false;// Reset.
-          options.error && options.error(error, info);
-        }),
-
-        // Flag to detect any circular references. 
-        _ref: true
-      });
+        error: options.error
+      }));
     },
 
     /**
@@ -755,7 +754,7 @@
       if(null == key) {
         throw new Error('Key must not be null');
       }
-      this.attr[key] = this._parse(key, value);
+      this.attr[key] = value;
     },
 
     /**
@@ -787,13 +786,24 @@
     /**
      * Returns JSON representation. Used by JSON#stringify.
      * 
+     * @param {boolean} [doNotFlatten] If false, returns entity using reference syntax.
      * @returns {Object} JSON representation.
      */
-    toJSON: function(name) {
-      // Flatten references.
-      var result = this._flattenAttr(this.attr);// Copy by value.
-      this.metadata && (result._acl = this.metadata.toJSON()._acl);
-      return result;
+    toJSON: function(doNotFlatten) {
+      if(true === doNotFlatten) {
+        // stringify and then parse again, so all attributes are actually plain
+        // JSON. Otherwise, references will still be Kinvey.Entity-s.
+        var result = JSON.parse(JSON.stringify(this.attr));
+        this.metadata && (result._acl = this.metadata.toJSON()._acl);
+        return result;
+      }
+
+      // Flatten entity by returning it in reference syntax.
+      return {
+        _type: 'KinveyRef',
+        _collection: this.collection,
+        _id: this.getId()
+      };
     },
 
     /**
@@ -806,165 +816,219 @@
     },
 
     /**
-     * Flattens attribute value.
+     * Saves references.
      * 
      * @private
-     * @param {*} value Attribute value.
-     * @returns {*}
+     * @param {Object} options
+     * @param {function(outAttr)} options.success Success callback.
+     * @param {function(error, info)} options.error Failure callback.
+     * @param {Array} __obj List of objects already saved.
      */
-    _flatten: function(value) {
-      if(value instanceof Object) {
-        if(value instanceof Kinvey.Entity) {// Case 1: value is a reference.
-          value = {
-            _type: 'KinveyRef',
-            _collection: value.collection,
-            _id: value.getId()
-          };
-        }
-        else if(value instanceof Array) {// Case 2: value is an array.
-          // Flatten all members.
-          value = value.map(bind(this, function(x) {
-            return this._flatten(x);
-          }));
-        }
-        else {
-          value = this._flattenAttr(value);// Case 3: value is an object.
-        }
-      }
-      return value;
-    },
+    _saveReferences: function(options) {
+      // To be able to save circular references, track already saved objects.
+      var saved = options.__obj || [];
 
-    /**
-     * Flattens attributes.
-     * 
-     * @private
-     * @param {Object} attr Attributes.
-     * @returns {Object} Flattened attributes.
-     */
-    _flattenAttr: function(attr) {
-      var result = {};
-      Object.keys(attr).forEach(bind(this, function(name) {
-        result[name] = this._flatten(attr[name]);
-      }));
-      return result;
-    },
+      // outAttr contains the path and replacement object of a reference.
+      var outAttr = [];
 
-    /**
-     * Parses references in name/value pair.
-     * 
-     * @private
-     * @param {string} name Attribute name.
-     * @param {*} value Attribute value.
-     * @returns {*} Parsed value.
-     */
-    _parse: function(name, value) {
-      if(value instanceof Object) {
-        if(value instanceof Kinvey.Entity) { }// Skip.
-        else if('KinveyRef' === value._type) {// Case 1: value is a reference.
-          // Create object from reference if embedded, otherwise skip.
-          if(value._obj) {
-            var Entity = this.map[name] || Kinvey.Entity;// Use mapping if defined.
+      // To check for references, check each and every attribute.
+      var stack = [];
+      Object.keys(this.attr).forEach(function(attr) {
+        if(this.attr[attr] instanceof Object) {
+          stack.push({ attr: attr, doc: this.attr[attr] });
+        }
+      }, this);
 
-            // Maintain store type and configuration.
-            var opts = { store: this.store.type, options: this.store.options };
-            value = new Entity(value._obj, value._collection, opts);
+      // Define function to check a single item in the stack. If a reference
+      // is found, save it (asynchronously).
+      var saveSingleReference = function() {
+        // If there is more to check, do that first.
+        if(stack[0]) {
+          var item = stack.shift();
+          var attr = item.attr;
+          var doc = item.doc;// Always an object.
+
+          // doc is an object. First case: doc is an entity.
+          if(doc instanceof Kinvey.Entity) {
+            // If entity is already saved, it is referenced circularly. In that
+            // case, add it to outAttr directly and skip saving it again.
+            if(-1 !== saved.indexOf(doc.__objectId)) {
+              outAttr.push({ attr: attr, obj: doc });
+              return saveSingleReference();// Proceed.
+            }
+
+            // Save doc if user has permission to do so.
+            saved.push(doc.__objectId);
+            if(doc.getMetadata().hasWritePermissions()) {
+              doc.save(merge(options, {
+                success: function(obj) {
+                  outAttr.push({ attr: attr, obj: obj });
+                  saveSingleReference();// Proceed.
+                },
+                error: options.error,
+                __obj: saved// Pass tracking.
+              }));
+            }
+            else {// Proceed without saving.
+              outAttr.push({ attr: attr, obj: doc });
+              saveSingleReference();// Proceed.
+            }
           }
-        }
-        else if(value instanceof Array) {// Case 2: value is an array.
-          // Loop through and parse all members.
-          value = value.map(bind(this, function(x) {
-            return this._parse(name, x);
-          }));
-        }
-        else {// Case 3: value is an object.
-          value = this._parseAttr(value, name);
-        }
-      }
-      return value;
-    },
 
-    /**
-     * Parses references in attributes.
-     * 
-     * @private
-     * @param {Object} attr Attributes.
-     * @param {string} [prefix] Name prefix.
-     * @return {Object} Parsed attributes.
-     */
-    _parseAttr: function(attr, prefix) {
-      var result = merge(attr);// Copy by value.
-      Object.keys(attr).forEach(bind(this, function(name) {
-        result[name] = this._parse((prefix ? prefix + '.' : '') + name, attr[name]);
-      }));
-      return result;
-    },
-    
-    /**
-     * Saves an attribute value.
-     * 
-     * @private
-     * @param {*} value Attribute value.
-     * @param {Object} options Options.
-     */
-    _save: function(value, options) {
-      if(value instanceof Object) {
-        if(value instanceof Kinvey.Entity) {// Case 1: value is a reference.
-          // Only save when authorized, otherwise just return. Note any writable
-          // children are not saved if the parent is not writable.
-          return value.getMetadata().hasWritePermissions() ? value.save(options) : options.success(value); 
-        }
-        if(value instanceof Array) {// Case 2: value is an array.
-          // Save every element in the array (serially), and update in place.
-          var i = 0;
-
-          // Define save handler.
-          var save = bind(this, function() {
-            var item = value[i];
-            item ? this._save(item, merge(options, {
-              success: function(response) {
-                value[i++] = response;// Update.
-                save();// Advance.
+          // Second case: doc is an array. Only immediate references are saved.
+          else if(doc instanceof Array) {
+            // Instead of calling a function for every member, filter array so
+            // only references remain.
+            var refs = [];
+            for(var i in doc) {
+              if(doc[i] instanceof Kinvey.Entity) {
+                refs.push({ index: i, doc: doc[i] });
               }
-            })) : options.success(value);
-          });
+            }
 
-          // Trigger.
-          return save();
+            // Define function to save the found references in the array.
+            var saveArrayReference = function(i) {
+              // If there is more to check, do that first.
+              if(i < refs.length) {
+                var index = refs[i].index;
+                var member = refs[i].doc;
+
+                // If entity is already saved, it is referenced circularly.
+                // In that case, add it to outAttr directly and skip saving
+                // it again.
+                if(-1 !== saved.indexOf(member.__objectId)) {
+                  outAttr.push({ attr: attr + '.' + index, obj: member });
+                  return saveArrayReference(++i);// Proceed.
+                }
+
+                // Save member if user has permission to do so.
+                saved.push(member.__objectId);
+                if(member.getMetadata().hasWritePermissions()) {
+                  member.save(merge(options, {
+                    success: function(obj) {
+                      outAttr.push({ attr: attr + '.' + index, obj: obj });
+                      saveArrayReference(++i);// Proceed.
+                    },
+                    error: options.error,
+                    __obj: saved// Pass tracking.
+                  }));
+                }
+                else {// Proceed without saving.
+                  outAttr.push({ attr: attr + '.' + index, obj: member });
+                  saveArrayReference(++i);// Proceed.
+                }
+              }
+
+              // Otherwise, array is traversed.
+              else {
+                saveSingleReference();// Proceed.
+              }
+            };
+            saveArrayReference(0);// Trigger.
+          }
+
+          // Third and last case: doc is a plain object.
+          else {
+            // Check each and every attribute by adding them to the stack.
+            Object.keys(doc).forEach(function(cAttr) {
+              if(doc[cAttr] instanceof Object) {
+                stack.push({ attr: attr + '.' + cAttr, doc: doc[cAttr] });
+              }
+            });
+            saveSingleReference();// Proceed.
+          }
         }
 
-        // Case 3: value is an object.
-        return this._saveAttr(value, options);
-      }
-
-      // Case 4: value is a scalar.
-      options.success(value);
-    },
+        // Otherwise, stack is empty and thus all references are saved.
+        else {
+          options.success(outAttr);
+        }
+      };
+      saveSingleReference();// Trigger.
+    }
+  }, {
+    /** @lends Kinvey.Entity */
 
     /**
-     * Saves attributes.
-     * 
+     * Resolves references in attr according to entity definition.
+     *
      * @private
+     * @param {Object} map Entity mapping.
      * @param {Object} attr Attributes.
-     * @param {Object} options Options.
+     * @param {Array} [resolve] Fields to resolve.
+     * @param {Object} [options] Options.
+     * @return {Object} Relational data structure.
      */
-    _saveAttr: function(attr, options) {
-      // Save attributes serially.
-      var attrs = Object.keys(attr);
-      var i = 0;
+    _resolve: function(map, attr, resolve, options) {
+      resolve = resolve ? resolve.slice(0) : [];// Copy by value.
 
-      // Define save handler.
-      var save = bind(this, function() {
-        var name = attrs[i++];
-        name ? this._save(attr[name], merge(options, {
-          success: function(response) {
-            attr[name] = response;// Update.
-            save();// Advance.
+      // Parse to be resolved references one-by-one. If there are no references,
+      // there is no performance penalty :)
+      while(resolve[0]) {
+        var path = resolve.shift();
+        var segments = path.split('.');
+        var doc = attr;
+
+        // Track path for entity mapping purposes.
+        var currentPath = '';
+        var currentMap = map;
+
+        // Descent in doc and look for segment.
+        while(segments[0]) {
+          // (Top-level) field name of doc.
+          var field = segments.shift();
+          currentPath += (currentPath ? '.' : '') + field;
+          var ClassDef = currentMap[currentPath] || Kinvey.Entity;
+
+          // Check and resolve top-level reference. Otherwise: descent deeper.
+          if(doc.hasOwnProperty(field) && null != doc[field]) {// doc does have field.
+            // First case: field is a (resolved) reference.
+            if('KinveyRef' === doc[field]._type || doc[field] instanceof Kinvey.Entity) {
+              if('KinveyRef' === doc[field]._type) {// Unresolved reference.
+                // Resolve only if actual object is embedded, or the to-be-resolved
+                // reference is a attribute of the currently found reference.
+                if(segments[0] || doc[field]._obj) {
+                  // The actual object may not be embedded, so we need to set
+                  // the object id explicitly (otherwise, save() will fail). 
+                  var id = doc[field]._id;
+                  doc[field] = new ClassDef(doc[field]._obj, doc[field]._collection, options);
+                  doc[field].setId(id);
+                }
+                else {// The desired resolve doesn’t have its object embedded.
+                  break;
+                }
+              }
+
+              // Current path and map are to be reset relative to the new entity.
+              currentPath = '';
+              currentMap = doc[field].map;
+              doc = doc[field].attr;
+            }
+
+            // Second case: field is an array.
+            else if(doc[field] instanceof Array) {
+              // Only immediate members will be checked are resolved.
+              for(var i in doc[field]) {
+                var member = doc[field][i];
+                if(member && 'KinveyRef' === member._type && member._obj) {
+                  doc[field][i] = new ClassDef(member._obj, member._collection, options);
+                }
+              }
+            }
+
+            // Third and last case: field is a plain object.
+            else {
+              doc = doc[field];
+            }
           }
-        })) : options.success(attr);
-      });
+          else {// doc does not have field; skip reference.
+            break;
+          }
+        }
+      }
 
-      // Trigger.
-      save();
+      // Attributes now contain all resolved references.
+      return attr;
     }
   });
 
@@ -1092,11 +1156,14 @@
       this.store.queryWithQuery(this.query.toJSON(), merge(options, {
         success: bind(this, function(response, info) {
           this.list = [];
-          response.forEach(bind(this, function(attr) {
+          response.forEach(function(attr) {
             // Maintain collection store type and configuration.
             var opts = { store: this.store.name, options: this.store.options };
+
+            // Resolve references, and create the new entity.
+            attr = Kinvey.Entity._resolve(this.entity.prototype.map, attr, options.resolve, opts);
             this.list.push(new this.entity(attr, this.name, opts));
-          }));
+          }, this);
           options.success && options.success(this.list, info);
         })
       }));
@@ -1312,10 +1379,23 @@
       // Parent method will always update.
       Kinvey.Entity.prototype.save.call(this, merge(options, {
         success: bind(this, function(_, info) {
-          this._saveToDisk();// Refresh cache.
+          // Extract token.
+          var token = this.attr._kmd.authtoken;
+          delete this.attr._kmd.authtoken;
+          this._login(token);// Refresh.
+
           options.success && options.success(this, info);
         })
       }));
+    },
+
+    /**
+     * Sets a new password.
+     * 
+     * @param {string} password New password.
+     */
+    setPassword: function(password) {
+      this.set(this.ATTR_PASSWORD, password);
     },
 
     /**
@@ -1354,7 +1434,7 @@
           delete response._kmd.authtoken;
 
           // Update attributes. This does not include the users password.
-          this.attr = this._parseAttr(response);
+          this.attr = response;
           this._login(token);
 
           options.success && options.success(this, info);
@@ -1402,7 +1482,7 @@
     _saveToDisk: function() {
       Storage.set(CACHE_TAG(), {
         token: this.token,
-        user: this.toJSON()
+        user: this.toJSON(true)
       });
     }
   }, {
@@ -1433,30 +1513,36 @@
     create: function(attr, options) {
       options || (options = {});
 
+      // Create the new user.
+      var user = options._target || new Kinvey.User(attr);
+
       // Make sure only one user is active at the time.
       var currentUser = Kinvey.getCurrentUser();
       if(null !== currentUser) {
         currentUser.logout(merge(options, {
           success: function() {
-            Kinvey.User.create(attr, options);
+            // Try again. Use the already instantiated user as target.
+            Kinvey.User.create(attr, merge(options, {
+              _target: user
+            }));
           }
         }));
-        return;
+      }
+      else {// Save the instantiated user.
+        Kinvey.Entity.prototype.save.call(user, merge(options, {
+          success: bind(user, function(_, info) {
+            // Extract token.
+            var token = this.attr._kmd.authtoken;
+            delete this.attr._kmd.authtoken;
+            this._login(token);
+  
+            options.success && options.success(this, info);
+          })
+        }));
       }
 
-      // Create a new user.
-      var user = options._target || new Kinvey.User(attr);
-      Kinvey.Entity.prototype.save.call(user, merge(options, {
-        success: bind(user, function(_, info) {
-          // Extract token.
-          var token = this.attr._kmd.authtoken;
-          delete this.attr._kmd.authtoken;
-          this._login(token);
-
-          options.success && options.success(this, info);
-        })
-      }));
-      return user;// return the instance
+      // Return the user instance.
+      return user;
     },
 
     /**
@@ -1516,15 +1602,13 @@
      * @private
      */
     _restore: function() {
-      // Return if there already is a current user. Safety check.
-      if(null !== Kinvey.getCurrentUser()) {
-        return;
-      }
-
       // Retrieve and restore user from storage.
       var data = Storage.get(CACHE_TAG());
       if(null !== data && null != data.token && null != data.user) {
         new Kinvey.User(data.user)._login(data.token);
+      }
+      else {// No user, reset.
+        Kinvey.setCurrentUser(null);
       }
     }
   });
@@ -1578,6 +1662,7 @@
     constructor: function(attr) {
       attr || (attr = {});
       this.acl = attr._acl || {};
+      this.acl.groups || (this.acl.groups = {});
       this.kmd = attr._kmd || {};
     },
 
@@ -1596,6 +1681,18 @@
     },
 
     /**
+     * Adds item read permissions for group.
+     * 
+     * @param {string} group Group id.
+     */
+    addReaderGroup: function(group) {
+      this.acl.groups.r || (this.acl.groups.r = []);
+      if(-1 === this.acl.groups.r.indexOf(group)) {
+        this.acl.groups.r.push(group);
+      }
+    },
+
+    /**
      * Adds item write permissions for user.
      * 
      * @param {string} user User id.
@@ -1604,6 +1701,18 @@
       this.acl.w || (this.acl.w = []);
       if(-1 === this.acl.w.indexOf(user)) {
         this.acl.w.push(user);
+      }
+    },
+
+    /**
+     * Adds item write permission for user group.
+     * 
+     * @param {string} group Group id.
+     */
+    addWriterGroup: function(group) {
+      this.acl.groups.w || (this.acl.groups.w = []);
+      if(-1 === this.acl.groups.w.indexOf(group)) {
+        this.acl.groups.w.push(group);
       }
     },
 
@@ -1617,12 +1726,30 @@
     },
 
     /**
+     * Returns all reader groups.
+     * 
+     * @return {Array} List of groups.
+     */
+    getReaderGroups: function() {
+      return this.acl.groups.r || [];
+    },
+
+    /**
      * Returns all readers.
      * 
      * @return {Array} List of readers.
      */
     getReaders: function() {
       return this.acl.r || [];
+    },
+
+    /**
+     * Returns all writer groups.
+     * 
+     * @return {Array} List of groups.
+     */
+    getWriterGroups: function() {
+      return this.acl.groups.w || [];
     },
 
     /**
@@ -1711,6 +1838,20 @@
     },
 
     /**
+     * Removes item read permissions for group.
+     * 
+     * @param {string} group Group id.
+     */
+    removeReaderGroup: function(group) {
+      if(this.acl.groups.r) {
+        var index = this.acl.groups.r.indexOf(group);
+        if(-1 !== index) {
+          this.acl.groups.r.splice(index, 1);
+        }
+      }
+    },
+
+    /**
      * Removes item write permissions for user.
      * 
      * @param {string} user User id.
@@ -1720,6 +1861,20 @@
         var index = this.acl.w.indexOf(user);
         if(-1 !== index) {
           this.acl.w.splice(index, 1);
+        }
+      }
+    },
+
+    /**
+     * Removes item write permissions for group.
+     * 
+     * @param {string} group Group id.
+     */
+    removeWriterGroup: function(group) {
+      if(this.acl.groups.w) {
+        var index = this.acl.groups.w.indexOf(group);
+        if(-1 !== index) {
+          this.acl.groups.w.splice(index, 1);
         }
       }
     },
@@ -3209,13 +3364,13 @@
      * @return {string} URL.
      */
     _getUrl: function(parts) {
-      var url = '/' + this.api + '/' + Kinvey.appKey + '/';
+      var url = '/' + this.api + '/' + this._encode(Kinvey.appKey) + '/';
 
       // Only the AppData API has explicit collections.
       if(Kinvey.Store.AppData.APPDATA_API === this.api && null != this.collection) {
-        url += this.collection + '/';
+        url += this._encode(this.collection) + '/';
       }
-      parts.id && (url += parts.id);
+      parts.id && (url += this._encode(parts.id));
 
       // Build query string.
       var param = [];
@@ -3231,7 +3386,7 @@
 
       // Resolve references.
       if(parts.resolve) {
-        param.push('resolve=' + parts.resolve.join(','));
+        param.push('resolve=' + parts.resolve.map(this._encode).join(','));
       }
 
       // Android < 4.0 caches all requests aggressively. For now, work around
