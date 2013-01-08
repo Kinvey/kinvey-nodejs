@@ -1,5 +1,5 @@
 /*!
- * Copyright (c) 2012 Kinvey, Inc. All rights reserved.
+ * Copyright (c) 2013 Kinvey, Inc. All rights reserved.
  *
  * Licensed to Kinvey, Inc. under one or more contributor
  * license agreements.  See the NOTICE file distributed with
@@ -172,15 +172,49 @@
      * @return {string} Device information.
      */
     var getDeviceInfo = function() {
-      // Example: "js-node/0.9.12 linux-node v0.6.13 0".
+      // Example: "js-node/0.9.13 linux-node v0.6.13 0".
       return [
-        'js-node/0.9.12',
+        'js-node/0.9.13',
         process.platform + '-' + process.title,
         process.version,
         0// always set device ID to 0.
       ].map(function(value) {
         return value.toString().toLowerCase().replace(' ', '_');
       }).join(' ');
+    };
+
+    /**
+     * Parses response body.
+     * 
+     * @private
+     * @param {Array} buffers List of buffers.
+     * @return {Buffer|string} Buffer if binary response, string otherwise.
+     */
+    var parse = function(buffers) {
+      // Join buffers. Node.js < 0.8 does not support Buffer.concat.
+      var buffer = Buffer.concat ? Buffer.concat(buffers) : (function(buffers) {
+        // Calculate total buffer length.
+        var length = 0;
+        buffers.forEach(function(buffer) {
+          length += buffer.length;
+        });
+
+        // Copy all buffers into one final buffer.
+        var result = new Buffer(length);
+        var pos = 0;
+        buffers.forEach(function(buffer) {
+          buffer.copy(result, pos);
+          pos += buffer.length;
+        });
+        return result;
+      }(buffers));
+
+      // If data stream is binary, return buffer. Otherwise, return string.
+      var str = buffer.toString();
+      if(buffer.length === Buffer.byteLength(str)) {// binary === utf8
+        return str;
+      }
+      return buffer;
     };
 
     /**
@@ -277,7 +311,11 @@
 
       // Add Content-Length header.
       // @link http://nodejs.org/api/buffer.html#buffer_class_method_buffer_bytelength_string_encoding
-      options.headers['Content-Length'] = body ? Buffer.byteLength(body, 'utf8') : 0;
+      var length = 0;
+      if(body) {
+        length = body instanceof Buffer ? body.length : Buffer.byteLength(body);
+      }
+      options.headers['Content-Length'] = length;
 
       // Create request.
       var path = nodeUrl.parse(url);
@@ -288,27 +326,28 @@
         port: path.port,
         method: method,
         headers: options.headers
-      }, function(response) {
+      }, bind(this, function(response) {
         // Capture data stream.
-        var data = '';
+        var data = [];
         response.on('data', function(chunk) {
-          data += chunk;
+          data.push(new Buffer(chunk));
         });
 
         // Handle response when it completes.
         // @link https://github.com/joyent/node/issues/728
-        var onComplete = function() {
+        var onComplete = bind(this, function() {
           // Success implicates status 2xx (Successful), or 304 (Not Modified).
+          var result = this._parse(data);
           if(2 === parseInt(response.statusCode / 100, 10) || 304 === response.statusCode) {
-            options.success(data, { network: true });
+            options.success(result, { network: true });
           }
           else {
-            options.error(data, { network: true });
+            options.error(result, { network: true });
           }
-        };
+        });
         response.on('close', onComplete);
         response.on('end', onComplete);
-      });
+      }));
 
       // Define request error handler.
       request.on('error', function(error) {
@@ -325,6 +364,7 @@
       this._base64 = base64;
       this._getAuth = getAuth;
       this._getDeviceInfo = getDeviceInfo;
+      this._parse = parse;
       this._send = send;
       this._xhr = xhr;
       return this;
@@ -353,7 +393,7 @@
    * 
    * @constant
    */
-  Kinvey.SDK_VERSION = '0.9.12';
+  Kinvey.SDK_VERSION = '0.9.13';
 
   /**
    * Returns current user, or null if not set.
@@ -1180,6 +1220,19 @@
         throw new Error('Query must be an instanceof Kinvey.Query');
       }
       this.query = query || new Kinvey.Query();
+    },
+
+    /**
+     * Returns JSON representation. Used by JSON#stringify.
+     * 
+     * @returns {Array} JSON representation.
+     */
+    toJSON: function() {
+      var result = [];
+      this.list.forEach(function(entity) {
+        result.push(entity.toJSON(true));
+      });
+      return result;
     }
   });
 
@@ -1305,34 +1358,114 @@
     },
 
     /**
-     * Logs in user given a Facebook oAuth token.
+     * Logs in user given a Facebook OAuth 2.0 token.
      * 
-     * @param {string} token oAuth token.
+     * @param {Object} tokens
+     * @param {string} access_token OAuth access token.
+     * @param {integer} expires_in Expiration interval.
      * @param {Object} [attr] User attributes.
      * @param {Object} [options]
-     * @param {function(entity, info)} [options.success] Success callback.
+     * @param {function(user, info)} [options.success] Success callback.
      * @param {function(error, info)} [options.error] Failure callback.
+     * @throws {Error} On incomplete tokens.
      */
-    loginWithFacebook: function(token, attr, options) {
+    loginWithFacebook: function(tokens, attr, options) {
+      tokens || (tokens = {});
+      if(!(tokens.access_token && tokens.expires_in)) {
+        throw new Error('Missing required token: access_token and/or expires_in');
+      }
+
+      // Merge token with user attributes.
       attr || (attr = {});
-      attr._socialIdentity = { facebook: { access_token: token } };
-      options || (options = {});
+      attr._socialIdentity = { facebook: tokens };
 
-      // Login, or create when there is no user with this Facebook identity.
-      this._doLogin(attr, merge(options, {
-        error: bind(this, function(error, info) {
-          // If user could not be found, register.
-          if(Kinvey.Error.USER_NOT_FOUND === error.error) {
-            // Pass current instance as (private) option to create.
-            this.attr = attr;// Required as we set a specific target below.
-            return Kinvey.User.create(attr, merge(options, {
-              _target: this
-            }));
-          }
+      // Login or register.
+      this._loginWithProvider(attr, options || {});
+    },
 
-          // Something else went wrong (invalid token?), error out.
-          options.error && options.error(error, info);
-        })
+    /**
+     * Logs in user given a Google+ OAuth 2.0 token.
+     * 
+     * @param {Object} tokens
+     * @param {string} access_token OAuth access token.
+     * @param {integer} expires_in Expiration interval.
+     * @param {Object} [attr] User attributes.
+     * @param {Object} [options]
+     * @param {function(user, info)} [options.success] Success callback.
+     * @param {function(error, info)} [options.error] Failure callback.
+     * @throws {Error} On incomplete tokens.
+     */
+    loginWithGoogle: function(tokens, attr, options) {
+      tokens || (tokens = {});
+      if(!(tokens.access_token && tokens.expires_in)) {
+        throw new Error('Missing required token: access_token and/or expires_in');
+      }
+
+      // Merge tokens with user attributes.
+      attr || (attr = {});
+      attr._socialIdentity = { google: tokens };
+
+      // Login, or register.
+      this._loginWithProvider(attr, options || {});
+    },
+
+    /**
+     * Logs in user given a LinkedIn OAuth 1.0a token.
+     * 
+     * @param {Object} tokens
+     * @param {string} tokens.access_token OAuth access token.
+     * @param {string} tokens.access_token_secret OAuth access token secret.
+     * @param {string} [tokens.consumer_key] LinkedIn application key.
+     * @param {string} [tokens.consumer_secret] LinkedIn application secret.
+     * @param {Object} [attr] User attributes.
+     * @param {Object} [options]
+     * @param {function(user, info)} [options.success] Success callback.
+     * @param {function(error, info)} [options.error] Failure callback.
+     * @throws {Error} On incomplete tokens.
+     */
+    loginWithLinkedIn: function(tokens, attr, options) {
+      tokens || (tokens = {});
+      if(!(tokens.access_token && tokens.access_token_secret)) {
+        throw new Error('Missing required token: access_token and/or access_token_secret');
+      }
+
+      // Merge tokens with user attributes.
+      attr || (attr = {});
+      attr._socialIdentity = { linkedIn: tokens };
+
+      // Login, or register. Set flag whether protocol is OAuth1.0a.
+      this._loginWithProvider(attr, merge(options, {
+        oauth1: tokens.consumer_key && tokens.consumer_secret ? null : 'linkedIn'
+      }));
+    },
+
+    /**
+     * Logs in user given a Twitter OAuth 1.0a token.
+     * 
+     * @param {Object} tokens
+     * @param {string} tokens.access_token OAuth access token.
+     * @param {string} tokens.access_token_secret OAuth access token secret.
+     * @param {string} tokens.consumer_key Twitter application key.
+     * @param {string} tokens.consumer_secret Twitter application secret.
+     * @param {Object} [attr] User attributes.
+     * @param {Object} [options]
+     * @param {function(user, info)} [options.success] Success callback.
+     * @param {function(error, info)} [options.error] Failure callback.
+     * @throws {Error} On incomplete tokens.
+     */
+    loginWithTwitter: function(tokens, attr, options) {
+      tokens || (tokens = {});
+      if(!(tokens.access_token && tokens.access_token_secret)) {
+        throw new Error('Missing required token: access_token and/or access_token_secret');
+      }
+
+      // Merge tokens with user attributes.
+      attr || (attr = {});
+      attr._socialIdentity = { twitter: tokens };
+
+      // Login, or register.
+      this._loginWithProvider(attr, merge(options, {
+        oauth1: tokens.consumer_key && tokens.consumer_secret ? null : 'twitter'
       }));
     },
 
@@ -1357,6 +1490,18 @@
           options.success && options.success(info);
         })
       }));
+    },
+
+    /**
+     * Purges social identity for provider.
+     * 
+     * @param {string} provider Provider.
+     */
+    purgeIdentity: function(provider) {
+      var identity = this.getIdentity();
+      if(identity && identity[provider]) {
+        identity[provider] = null;
+      }
     },
 
     /**
@@ -1460,6 +1605,31 @@
     },
 
     /**
+     * Logs in or create user with a given identity.
+     * 
+     * @private
+     * @param {Object} [attr] User attributes.
+     * @param {Object} [options]
+     * @param {function(user, info)} [options.success] Success callback.
+     * @param {function(error, info)} [options.error] Failure callback.
+     */
+    _loginWithProvider: function(attr, options) {
+      // Login, or create when there is no user with this identity.
+      this._doLogin(attr, merge(options, {
+        error: bind(this, function(error, info) {
+          // If user could not be found, register.
+          if(Kinvey.Error.USER_NOT_FOUND === error.error) {
+            // Pass current instance to render result in.
+            return Kinvey.User.create(attr, merge(options, { __target: this }));
+          }
+
+          // Something else went wrong (invalid token?), error out.
+          options.error && options.error(error, info);
+        })
+      }));
+    },
+
+    /**
      * Marks user no longer as logged in.
      * 
      * @private
@@ -1480,9 +1650,11 @@
      * @private
      */
     _saveToDisk: function() {
+      var attr = this.toJSON(true);
+      delete attr.password;// Never save password.
       Storage.set(CACHE_TAG(), {
         token: this.token,
-        user: this.toJSON(true)
+        user: attr
       });
     }
   }, {
@@ -1514,7 +1686,8 @@
       options || (options = {});
 
       // Create the new user.
-      var user = options._target || new Kinvey.User(attr);
+      var user = options.__target || new Kinvey.User();
+      user.attr = attr;// Set attributes.
 
       // Make sure only one user is active at the time.
       var currentUser = Kinvey.getCurrentUser();
@@ -3262,6 +3435,12 @@
      * @param {Object} [options] Options.
      */
     login: function(object, options) {
+      // OAuth1.0a hook to allow login without providing app key and secret.
+      if(options.oauth1 && Kinvey.OAuth) {
+        return Kinvey.OAuth.login(options.oauth1, object, options);
+      }
+
+      // Regular login.
       var url = this._getUrl({ id: 'login' });
       this._send('POST', url, JSON.stringify(object), options);
     },
@@ -3335,7 +3514,12 @@
      * @param {Object} [options] Options.
      */
     save: function(object, options) {
-      // Create the object if nonexistent, update otherwise.
+      // OAuth1.0a hook to allow login without providing app key and secret.
+      if(options.oauth1 && Kinvey.Store.AppData.USER_API === this.api && Kinvey.OAuth) {
+        return Kinvey.OAuth.create(options.oauth1, object, options);
+      }
+
+      // Regular save, create the object if nonexistent, update otherwise.
       var method = object._id ? 'PUT' : 'POST';
 
       var url = this._getUrl({ id: object._id });
@@ -3581,5 +3765,139 @@
 
   // Apply mixin.
   Xhr.call(Kinvey.Store.Blob.prototype);
+
+  /**
+   * Kinvey OAuth namespace.
+   * 
+   * @namespace
+   */
+  Kinvey.OAuth = {
+    // BL API uses the user collection.
+    api: Kinvey.Store.AppData.USER_API,
+
+    // Default options.
+    options: {
+      timeout: 10000,// Timeout in ms.
+
+      success: function() { },
+      error: function() { }
+    },
+
+    /**
+     * Processes request token, and obtains access token for OAuth provider.
+     * 
+     * @param {string} provider OAuth provider.
+     * @param {Object} response Response attributes.
+     * @param {Object} [options]
+     * @param {string} options.oauth_token_secret OAuth1.0a token secret.
+     * @param {function(tokens)} options.success Success callback.
+     * @param {function(error)} options.error Failure callback.
+     */
+    accessToken: function(provider, response, options) {
+      response || (response = {});
+      options || (options = {});
+
+      // Handle both OAuth1.0a and OAuth 2.0 protocols.
+      if(response.access_token && response.expires_in) {// OAuth 2.0.
+        options.success && options.success({
+          access_token: response.access_token,
+          expires_in: response.expires_in
+        });
+      }
+      else if(response.oauth_token && response.oauth_verifier && options.oauth_token_secret) {
+        // OAuth 1.0a requires a request to verify the tokens.
+        this._send('POST', this._getUrl(provider, 'verifyToken'), JSON.stringify({
+          oauth_token: response.oauth_token,
+          oauth_token_secret: options.oauth_token_secret,
+          oauth_verifier: response.oauth_verifier
+        }), options);
+      }
+      else {// Error, most likely the user did not grant authorization.
+        options.error && options.error({
+          error: Kinvey.Error.RESPONSE_PROBLEM,
+          description: 'User did not grant authorization to the OAuth provider.',
+          debug: response.denied || response.error || response.oauth_problem
+        });
+      }
+    },
+
+    /**
+     * Creates a new user given its OAuth access tokens. OAuth1.0a only.
+     * 
+     * @param {string} provider OAuth provider.
+     * @param {Object} attr User attributes.
+     * @param {Object} [options]
+     * @param {function(response, info)} options.success Success callback.
+     * @param {function(error, info)} options.error Failure callback.
+     */
+    create: function(provider, attr, options) {
+      this._send('POST', this._getUrl(provider, 'create'), JSON.stringify(attr), options);
+    },
+    
+    /**
+     * Logs in an existing user given its OAuth access tokens. OAuth1.0a only.
+     * 
+     * @param {string} provider OAuth provider.
+     * @param {Object} attr User attributes.
+     * @param {Object} [options]
+     * @param {function(response, info)} options.success Success callback.
+     * @param {function(error, info)} options.error Failure callback.
+     */
+    login: function(provider, attr, options) {
+      this._send('POST', this._getUrl(provider, 'login'), JSON.stringify(attr), options);
+    },
+
+    /**
+     * Requests an OAuth token.
+     * 
+     * @param {string} provider OAuth provider.
+     * @param {Object} [options]
+     * @param {string} options.redirect Redirect URL.
+     * @param {function(tokens, info)} options.success Success callback.
+     * @param {function(error, info)} options.error Failure callback.
+     * @throws {Error} On invalid provider.
+     */
+    requestToken: function(provider, options) {
+      options || (options = {});
+      this._send('POST', this._getUrl(provider, 'requestToken'), JSON.stringify({
+        redirect: options.redirect || '',
+        state: options.state || null
+      }), options);
+    },
+
+    /**
+     * Constructs URL.
+     * 
+     * @private
+     * @param {string} provider OAuth provider.
+     * @param {string} step OAuth step.
+     * @return {string} URL.
+     */
+    _getUrl: function(provider, step) {
+      return '/' + this.api + '/' + encodeURIComponent(Kinvey.appKey) + '/' +
+       '?provider=' + encodeURIComponent(provider) +
+       '&step=' + encodeURIComponent(step) +
+       '&_=' + new Date().getTime();// Android < 4.0 cache bust.
+    },
+
+    /**
+     * Tokenizes string.
+     *
+     * @private
+     * @param {string} string Token string.
+     * @example foo=bar&baz=qux => { foo: 'bar', baz: 'qux' }
+     */
+    _tokenize: function(string) {
+      var tokens = {};
+      string.split('&').forEach(function(pair) {
+        var segments = pair.split('=', 2).map(decodeURIComponent);
+        segments[0] && (tokens[segments[0]] = segments[1]);
+      });
+      return tokens;
+    }
+  };
+
+  // Apply mixin.
+  Xhr.call(Kinvey.OAuth);
 
 }.call(this));
