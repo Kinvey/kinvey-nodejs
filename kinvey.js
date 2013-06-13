@@ -172,9 +172,9 @@
      * @return {string} Device information.
      */
     var getDeviceInfo = function() {
-      // Example: "js-node/0.9.14 linux-node v0.6.13 0".
+      // Example: "js-node/0.9.15 linux-node v0.6.13 0".
       return [
-        'js-node/0.9.14',
+        'js-node/0.9.15',
         process.platform + '-' + process.title,
         process.version,
         0// always set device ID to 0.
@@ -415,7 +415,7 @@
    * 
    * @constant
    */
-  Kinvey.SDK_VERSION = '0.9.14';
+  Kinvey.SDK_VERSION = '0.9.15';
 
   /**
    * Returns current user, or null if not set.
@@ -3270,6 +3270,20 @@
     }
   });
 
+  
+  /**
+   * Executes a custom command.
+   * 
+   * @param {string} id The endpoint.
+   * @param {Object} [args] Command arguments.
+   * @param {Object} options Options.
+   */
+  Kinvey.execute = function(id, args, options) {
+    var store = new Kinvey.Store.Rpc();
+    store.execute(id, args, options);
+  };
+  
+
   /**
    * Kinvey Store namespace. Home to all stores.
    * 
@@ -3345,6 +3359,18 @@
       options.error && (this.options.error = options.error);
     },
 
+    /**
+     * Executes a custom command.
+     * 
+     * @param {string} id The endpoint.
+     * @param {Object} args Command arguments,.
+     * @param {Object} [options] Options.
+     */
+    execute: function(id, args, options) {
+      var url = this._getUrl([ 'custom', id ]);
+      this._send('POST', url, JSON.stringify(args), options);
+    },
+    
     /**
      * Resets password for a user.
      * 
