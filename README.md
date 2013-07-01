@@ -15,7 +15,7 @@ You can add the library in three ways. The recommended way to add the module to 
 {
   ...
   "dependencies": {
-    "kinvey": "~0.9"
+    "kinvey": "~1.0"
     ...
   }
   ...
@@ -46,8 +46,8 @@ Now, the library is available for use in your project. Import the library in you
 ```javascript
 var Kinvey = require('kinvey');
 Kinvey.init({
-    appKey: 'your-app-key',
-    appSecret: 'your-app-secret'
+    appKey    : 'App Key',
+    appSecret : 'App Secret'
 });
 ```
 
