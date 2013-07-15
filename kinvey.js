@@ -110,7 +110,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.0.0';
+    Kinvey.SDK_VERSION = '1.0.3';
 
     // Properties.
     // -----------
@@ -155,55 +155,68 @@
     // The active user.
     var activeUser = null;
 
+    // Status flag indicating whether the active user is ready to be used.
+    var activeUserReady = false;
+
     /**
      * Restores the active user (if any) from disk.
      *
      * @returns {Promise} The active user, or `null` if there is no active user.
      */
     var restoreActiveUser = function() {
-      // Retrieve the authtoken from storage.
+      // Retrieve the authtoken from storage. If there is an authtoken, restore the
+      // active user from disk.
       var promise = Storage.get('activeUser');
+      return promise.then(function(user) {
+        // If there is no active user, set to `null`.
+        if(null == user) {
+          return Kinvey.setActiveUser(null);
+        }
 
-      // If there is an authtoken, restore the active user from disk.
-      return promise.then(function(authtoken) {
-        if(null != authtoken) {
+        // Debug.
+        if(KINVEY_DEBUG) {
+          log('Restoring the active user.');
+        }
+
+        // Set the active user to a near-empty user with only the authtoken set.
+        var previous = Kinvey.setActiveUser({
+          _id: user[0],
+          _kmd: {
+            authtoken: user[1]
+          }
+        });
+
+        // Retrieve the user. The `Kinvey.User.me` method will also update the
+        // active user. If `INVALID_CREDENTIALS`, reset the active user.
+        return Kinvey.User.me().then(null, function(error) {
           // Debug.
           if(KINVEY_DEBUG) {
-            log('Restoring the active user.');
+            log('Failed to restore the active user.', error);
           }
 
-          // Set the active user to a near-empty user with only the authtoken set.
-          var previous = Kinvey.setActiveUser({
-            _kmd: {
-              authtoken: authtoken
-            }
-          });
-
-          // Retrieve the user. The `Kinvey.User.me` method will also update the
-          // active user. If `INVALID_CREDENTIALS`, reset the active user.
-          return Kinvey.User.me().then(null, function(error) {
-            // Debug.
-            if(KINVEY_DEBUG) {
-              log('Failed to restore the active user.', error);
-            }
-
-            // Reset the active user.
-            if(Kinvey.Error.INVALID_CREDENTIALS === error.name) {
-              Kinvey.setActiveUser(previous);
-            }
-            return Kinvey.Defer.reject(error);
-          });
-        }
-        return Kinvey.getActiveUser();
+          // Reset the active user.
+          if(Kinvey.Error.INVALID_CREDENTIALS === error.name) {
+            Kinvey.setActiveUser(previous);
+          }
+          return Kinvey.Defer.reject(error);
+        });
       });
     };
 
     /**
-     * Returns the active user.
-     *
-     * @returns {?Object} The active user, or `null` if there is no active user.
-     */
+ * Returns the active user.
+ *
+ * @throws {Error} `Kinvey.getActiveUser` can only be called after the promise
+     returned by `Kinvey.init` fulfills or rejects.
+ * @returns {?Object} The active user, or `null` if there is no active user.
+ */
     Kinvey.getActiveUser = function() {
+      // Validate preconditions.
+      if(false === activeUserReady) {
+        throw new Kinvey.Error('Kinvey.getActiveUser can only be called after the ' +
+          'promise returned by Kinvey.init fulfills or rejects.');
+      }
+
       return activeUser;
     };
 
@@ -222,8 +235,14 @@
       }
 
       // Validate arguments.
-      if(null != user && !(null != user._kmd && null != user._kmd.authtoken)) {
-        throw new Kinvey.Error('user argument must contain: _kmd.authtoken.');
+      if(null != user && !(null != user._id && null != user._kmd && null != user._kmd.authtoken)) {
+        throw new Kinvey.Error('user argument must contain: _id, _kmd.authtoken.');
+      }
+
+      // At this point, the active user is ready to be used (even though the
+      // user data is not retrieved yet).
+      if(false === activeUserReady) {
+        activeUserReady = true;
       }
 
       var result = Kinvey.getActiveUser(); // Previous.
@@ -231,7 +250,7 @@
 
       // Update disk state in the background.
       if(null != user) { // Save the active user.
-        Storage.save('activeUser', user._kmd.authtoken);
+        Storage.save('activeUser', [user._id, user._kmd.authtoken]);
       }
       else { // Delete the active user.
         Storage.destroy('activeUser');
@@ -268,6 +287,9 @@
       if(null == options.appSecret && null == options.masterSecret) {
         throw new Kinvey.Error('options argument must contain: appSecret and/or masterSecret.');
       }
+
+      // The active user is not ready yet.
+      activeUserReady = false;
 
       // Save credentials.
       Kinvey.appKey = options.appKey;
@@ -956,21 +978,24 @@
 
     /**
      * @typedef {Object} Options
-     * @property {function} [error]     Failure callback.
-     * @property {Array}    [exclude]   List of relational fields not to save. Use
-     *             in conjunction with `save` or `update`.
-     * @property {boolean}  [fallback]  Fallback to the network if the request
+     * @property {function} [error]        Failure callback.
+     * @property {Array}    [exclude]      List of relational fields not to save.
+     *             Use in conjunction with `save` or `update`.
+     * @property {boolean}  [fallback]     Fallback to the network if the request
      *             failed locally. Use in conjunction with `offline`.
      * @property {boolean}  [fileTls=true] Use the https protocol to communicate
      *             with GCS.
-     * @property {integer}  [fileTtl]   A custom expiration time (in seconds).
-     * @property {boolean}  [offline]   Initiate the request locally.
-     * @property {boolean}  [refresh]   Persist the response locally.
-     * @property {Object}   [relations] Map of relational fields to collections.
-     * @property {boolean}  [skipBL]    Skip Business Logic. Use in conjunction
+     * @property {integer}  [fileTtl]      A custom expiration time (in seconds).
+     * @property {boolean}  [nocache]      Use cache busting.
+     * @property {boolean}  [offline]      Initiate the request locally.
+     * @property {boolean}  [refresh]      Persist the response locally.
+     * @property {Object}   [relations]    Map of relational fields to collections.
+     * @property {boolean}  [skipBL]       Skip Business Logic. Use in conjunction
      *             with Master Secret.
-     * @property {function} [success]   Success callback.
-     * @property {integer}  [timeout]   The request timeout (ms).
+     * @property {function} [success]      Success callback.
+     * @property {integer}  [timeout]      The request timeout (ms).
+     * @property {boolean}  [trace=false]  Add the request id to the error object
+     *             for easy request tracking (in case of contacting support).
      */
 
     // Define the `Storage` namespace, used to store application state.
@@ -1460,19 +1485,20 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.0.0'];
+      var parts = ['js-nodejs/1.0.3'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
       return parts.concat(
-      [
+        [
           platform,
           version,
           manufacturer,
           id
-      ].map(function(part) {
-        return null != part ? part.toString().replace(/\s/g, '_').toLowerCase() : 'unknown';
-      })).join(' ');
+        ].map(function(part) {
+          return null != part ? part.toString().replace(/\s/g, '_').toLowerCase() : 'unknown';
+        })
+      ).join(' ');
     };
 
     // ACL.
@@ -1992,7 +2018,8 @@
         'function(doc, out) {' +
         '  out.result = (out.result * out.count + doc["' + field + '"]) / (out.count + 1);' +
         '  out.count += 1;' +
-        '}');
+        '}'
+      );
       return agg;
     };
 
@@ -3370,6 +3397,7 @@
           collection: '_me',
           auth: Auth.Session,
           local: {
+            req: true,
             res: true
           }
         }, options).then(function(user) {
@@ -4991,9 +5019,14 @@
                   return Kinvey.Defer.resolve(member);
                 }
 
+                // To allow storing of users with references locally, use
+                // `Kinvey.DataStore` if the operation does not need to notify
+                // the synchronization functionality.
+                var saveUsingDataStore = options.offline && false === options.track;
+
                 // Forward to the `Kinvey.User` or `Kinvey.DataStore` namespace.
                 var promise;
-                if(USERS === collection) {
+                if(USERS === collection && !saveUsingDataStore) {
                   // If the referenced user is new, create with `state` set to false.
                   var isNew = null == member._id;
                   options.state = isNew && '' !== property ? options.state || false : options.state;
@@ -5213,12 +5246,12 @@
         // Use net. If `options.refresh`, persist the response locally.
         var promise = Kinvey.Persistence.Net.read(request, options);
         if(request.local.res && options.refresh) {
-          // Debug.
-          if(KINVEY_DEBUG) {
-            log('Persisting the response locally.');
-          }
-
           return promise.then(function(response) {
+            // Debug.
+            if(KINVEY_DEBUG) {
+              log('Persisting the response locally.');
+            }
+
             // Add support for references.
             var promise;
             if(options.relations) {
@@ -5529,8 +5562,8 @@
        * @param {Object} adapter Object implementing the `Database` interface.
        */
       use: use([
-          'batch', 'clean', 'count', 'destroy', 'destruct', 'find', 'findAndModify',
-          'get', 'group', 'save', 'update'
+        'batch', 'clean', 'count', 'destroy', 'destruct', 'find', 'findAndModify',
+        'get', 'group', 'save', 'update'
       ])
     };
 
@@ -5581,7 +5614,7 @@
           if(options.offline && false !== options.track) {
             // Debug.
             if(KINVEY_DEBUG) {
-              log('Notifying the synchronization functionality.', response);
+              log('Notifying the synchronization functionality.', collection, response);
             }
 
             return Sync.notify(collection, response, options).then(function() {
@@ -5612,10 +5645,26 @@
         // Normalize “collections” of the user namespace.
         var collection = USERS === request.namespace ? USERS : request.collection;
 
-        // The read request can be a count, query, or simple get. Neither change
-        // any application data, and therefore none are subject to synchronization.
+        // The read request can be a count, me, query, or simple get. Neither
+        // change any application data, and therefore none are subject to
+        // synchronization.
         if('_count' === request.id) { // Count.
           return Database.count(collection, request.query, options);
+        }
+        if('_me' === request.collection) { // Me.
+          // If there is an active user, attempt to retrieve its details.
+          var user = Kinvey.getActiveUser();
+          if(null !== user) {
+            return Database.get(collection, user._id, options).then(null, function(error) {
+              // If `ENTITY_NOT_FOUND`, return all we know about the active user.
+              if(error.name === Kinvey.Error.ENTITY_NOT_FOUND) {
+                return user;
+              }
+              return Kinvey.Defer.reject(error);
+            });
+          }
+          var error = clientError(Kinvey.Error.NO_ACTIVE_USER);
+          return Kinvey.Defer.reject(error);
         }
 
         // Query the collection, or retrieve a single document.
@@ -5662,7 +5711,7 @@
           if(options.offline && false !== options.track) {
             // Debug.
             if(KINVEY_DEBUG) {
-              log('Notifying the synchronization functionality.', response);
+              log('Notifying the synchronization functionality.', collection, response);
             }
 
             return Sync.notify(collection, response, options).then(function() {
@@ -5707,7 +5756,7 @@
           if(options.offline && false !== options.track) {
             // Debug.
             if(KINVEY_DEBUG) {
-              log('Notifying the synchronization functionality.', response);
+              log('Notifying the synchronization functionality.', collection, response);
             }
 
             return Sync.notify(collection, response.documents, options).then(function() {
@@ -5869,6 +5918,9 @@
           return Kinvey.Defer.reject(error);
         }
 
+        // Cast arguments.
+        options.trace = options.trace || (KINVEY_DEBUG && false !== options.trace);
+
         // Build, escape, and join URL segments.
         // Format: <API_ENDPOINT>/<namespace>[/<Kinvey.appKey>][/<collection>][/<id>]
         var segments = [request.namespace, Kinvey.appKey, request.collection, request.id];
@@ -5907,7 +5959,8 @@
           if(flags.hasOwnProperty(key)) {
             var value = isString(flags[key]) ? flags[key] : JSON.stringify(flags[key]);
             params.push(
-              Kinvey.Persistence.Net.encode(key) + '=' + Kinvey.Persistence.Net.encode(value));
+              Kinvey.Persistence.Net.encode(key) + '=' + Kinvey.Persistence.Net.encode(value)
+            );
           }
         }
 
@@ -5938,6 +5991,10 @@
         if(options.skipBL) {
           headers['X-Kinvey-Skip-Business-Logic'] = true;
         }
+        if(options.trace) {
+          headers['X-Kinvey-Include-Headers-In-Response'] = 'X-Kinvey-Request-Id';
+          headers['X-Kinvey-ResponseWrapper'] = true;
+        }
 
         // Debug.
         if(KINVEY_DEBUG) {
@@ -5966,13 +6023,28 @@
             url,
             request.data,
             headers,
-            options).then(function(response) {
+            options
+          ).then(function(response) {
             // Parse the response.
-            return JSON.parse(response);
+            response = JSON.parse(response);
+
+            // Debug.
+            if(KINVEY_DEBUG && options.trace && isObject(response)) {
+              log('Obtained the request ID.', response.headers['X-Kinvey-Request-Id']);
+            }
+
+            return options.trace && isObject(response) ? response.result : response;
           }, function(response) {
             // Parse the response.
+            var requestId = null;
             try {
               response = JSON.parse(response);
+
+              // If `options.trace`, extract result and headers from the response.
+              if(options.trace) {
+                requestId = response.headers['X-Kinvey-Request-Id'];
+                response = response.result;
+              }
             }
             catch(e) {}
 
@@ -5983,6 +6055,16 @@
                 description: response.description || '',
                 debug: response.debug || ''
               };
+
+              // If `options.trace`, add the `requestId`.
+              if(options.trace) {
+                response.requestId = requestId;
+
+                // Debug.
+                if(KINVEY_DEBUG) {
+                  log('Obtained the request ID.', requestId);
+                }
+              }
             }
             else { // Client-side error.
               var dict = { // Dictionary for common errors.
@@ -6211,8 +6293,8 @@
 
         // Step 1: obtain the documents from local and net.
         var promises = [
-            Kinvey.Persistence.Local.read(request, options),
-            Kinvey.Persistence.Net.read(request, options)
+          Kinvey.Persistence.Local.read(request, options),
+          Kinvey.Persistence.Net.read(request, options)
         ];
         return Kinvey.Defer.all(promises).then(function(responses) {
           // `responses` is a list of documents. Re-format as object
@@ -6233,12 +6315,13 @@
           var promises = identifiers.map(function(id) {
             return Sync._document(
               collection, {
-              id: id,
-              timestamp: documents[id]
-            }, // The document metadata.
-            response.local[id] || null, // The local document.
-            response.net[id] || null, // The net document.
-            options).then(null, function(response) {
+                id: id,
+                timestamp: documents[id]
+              }, // The document metadata.
+              response.local[id] || null, // The local document.
+              response.net[id] || null, // The net document.
+              options
+            ).then(null, function(response) {
               // Rejection occurs when a conflict could not be resolved. Append the
               // id to the errors, and resolve.
               result.error.push(response.id);
@@ -6257,8 +6340,8 @@
 
           // Save and destroy all documents in parallel.
           var promises = [
-              Sync._save(collection, created, options),
-              Sync._destroy(collection, destroyed, options)
+            Sync._save(collection, created, options),
+            Sync._destroy(collection, destroyed, options)
           ];
           return Kinvey.Defer.all(promises);
         }).then(function(responses) {
@@ -6319,8 +6402,8 @@
         // Delete from local and net in parallel. Deletion is an atomic action,
         // therefore the documents will either all be part of `success` or `error`.
         var promises = [
-            Kinvey.Persistence.Local.destroy(request, options),
-            Kinvey.Persistence.Net.destroy(request, options)
+          Kinvey.Persistence.Local.destroy(request, options),
+          Kinvey.Persistence.Net.destroy(request, options)
         ];
         return Kinvey.Defer.all(promises).then(function() {
           return {
