@@ -1,24 +1,18 @@
 /*!
- * Copyright (c) 2013 Kinvey, Inc. All rights reserved.
+ * Copyright (c) 2013 Kinvey, Inc.
  *
- * Licensed to Kinvey, Inc. under one or more contributor
- * license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright
- * ownership.  Kinvey, Inc. licenses this file to you under the
- * Apache License, Version 2.0 (the "License"); you may not
- * use this file except in compliance with the License.  You
- * may obtain a copy of the License at
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- *         http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-// Wrap in [IIFE](https://www.wikipedia.org/wiki/Immediately-invoked_function_expression).
 (function() {
 
   // Setup.
@@ -110,7 +104,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.0.3';
+    Kinvey.SDK_VERSION = '1.0.4';
 
     // Properties.
     // -----------
@@ -986,7 +980,7 @@
      * @property {boolean}  [fileTls=true] Use the https protocol to communicate
      *             with GCS.
      * @property {integer}  [fileTtl]      A custom expiration time (in seconds).
-     * @property {boolean}  [nocache]      Use cache busting.
+     * @property {boolean}  [nocache=true] Use cache busting.
      * @property {boolean}  [offline]      Initiate the request locally.
      * @property {boolean}  [refresh]      Persist the response locally.
      * @property {Object}   [relations]    Map of relational fields to collections.
@@ -1485,7 +1479,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.0.3'];
+      var parts = ['js-nodejs/1.0.4'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -2479,6 +2473,8 @@
       }
     };
 
+    /* jshint sub: true */
+
     // Files.
     // ------
 
@@ -2816,7 +2812,7 @@
         data.mimeType = data.mimeType || file.mimeType || file.type || 'application/octet-stream';
 
         // Apply options.
-        if(options.public) {
+        if(options['public']) {
           data._public = true;
         }
         options.contentType = data.mimeType;
@@ -2875,6 +2871,38 @@
     // Metadata.
     // ---------
 
+    // Patch JavaScript implementations lacking ISO-8601 date support.
+    // http://jsfiddle.net/mplungjan/QkasD/
+    var fromISO = function(dateString) {
+      var date = Date.parse(dateString);
+      if(date) {
+        return new Date(date);
+      }
+
+      // Patch here.
+      var regex = /^(\d{4}\-\d\d\-\d\d([tT][\d:\.]*)?)([zZ]|([+\-])(\d\d):?(\d\d))?$/;
+      var match = dateString.match(regex);
+      if(null != match[1]) {
+        var day = match[1].split(/\D/).map(function(segment) {
+          return root.parseInt(segment, 10) || 0;
+        });
+        day[1] -= 1; // Months range 0–11.
+        day = new Date(Date.UTC.apply(Date, day));
+
+        // Adjust for timezone.
+        if(null != match[5]) {
+          var timezone = root.parseInt(match[5], 10) / 100 * 60;
+          timezone += (null != match[6] ? root.parseInt(match[6], 10) : 0);
+          timezone *= ('+' === match[4]) ? -1 : 1;
+          if(timezone) {
+            day.setUTCMinutes(day.getUTCMinutes() * timezone);
+          }
+        }
+        return day;
+      }
+      return NaN; // Invalid.
+    };
+
     // Wrapper for accessing the `_acl` and `_kmd` properties of a document
     // (i.e. entity and users).
 
@@ -2930,7 +2958,7 @@
        */
       getCreatedAt: function() {
         if(null != this._document._kmd && null != this._document._kmd.ect) {
-          return new Date(this._document._kmd.ect);
+          return fromISO(this._document._kmd.ect);
         }
         return null;
       },
@@ -2954,7 +2982,7 @@
        */
       getLastModified: function() {
         if(null != this._document._kmd && null != this._document._kmd.lmt) {
-          return new Date(this._document._kmd.lmt);
+          return fromISO(this._document._kmd.lmt);
         }
         return null;
       },
@@ -4444,7 +4472,7 @@
         coord[1] = parseFloat(coord[1]);
 
         // `$nearSphere` and `$maxDistance` are separate filters.
-        var result = this._addFilter(field, '$near', [coord[0], coord[1]]);
+        var result = this._addFilter(field, '$nearSphere', [coord[0], coord[1]]);
         if(null != maxDistance) {
           this._addFilter(field, '$maxDistance', maxDistance);
         }
@@ -5947,9 +5975,9 @@
           }
         }
 
-        // If `options.nocache`, add a cache busting query string. This is useful
-        // for Android < 4.0 which caches all requests aggressively.
-        if(options.nocache) {
+        // Unless `options.nocache` is false, add a cache busting query string.
+        // This is useful for Android < 4.0 which caches all requests aggressively.
+        if(false !== options.nocache) {
           flags._ = Math.random().toString(36).substr(2);
         }
 
