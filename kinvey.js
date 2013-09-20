@@ -104,7 +104,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.1.0';
+    Kinvey.SDK_VERSION = '1.1.1';
 
     // Properties.
     // -----------
@@ -186,9 +186,25 @@
           return Kinvey.getActiveUser();
         }
 
+        // Remove callbacks from `options` to avoid multiple calls.
+        var fnSuccess = options.success;
+        var fnError = options.error;
+        delete options.success;
+        delete options.error;
+
         // Retrieve the user. The `Kinvey.User.me` method will also update the
         // active user. If `INVALID_CREDENTIALS`, reset the active user.
-        return Kinvey.User.me().then(null, function(error) {
+        return Kinvey.User.me(options).then(function(response) {
+          // Debug.
+          if(KINVEY_DEBUG) {
+            log('Restored the active user.', response);
+          }
+
+          // Restore the options and return the response.
+          options.success = fnSuccess;
+          options.error = fnError;
+          return response;
+        }, function(error) {
           // Debug.
           if(KINVEY_DEBUG) {
             log('Failed to restore the active user.', error);
@@ -198,6 +214,10 @@
           if(Kinvey.Error.INVALID_CREDENTIALS === error.name) {
             Kinvey.setActiveUser(previous);
           }
+
+          // Restore the options and return the response.
+          options.success = fnSuccess;
+          options.error = fnError;
           return Kinvey.Defer.reject(error);
         });
       });
@@ -1375,7 +1395,8 @@
       }
     };
 
-    /* globals angular: true, Backbone: true, Ember: true, jQuery: true, ko: true, Titanium: true */
+    /* globals angular: true, Backbone: true, Ember: true, forge: true, jQuery: true */
+    /* globals ko: true, Titanium: true */
 
     // Device information.
     // -------------------
@@ -1428,6 +1449,10 @@
         }
         id = Titanium.Platform.getId();
       }
+      else if('undefined' !== typeof forge) { // Trigger.io
+        libraries.push('triggerio/' + (forge.config.platform_version || ''));
+        id = forge.config.uuid;
+      }
       else if('undefined' !== typeof process) { // Node.js
         platform = process.title;
         version = process.version;
@@ -1463,7 +1488,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.1.0'];
+      var parts = ['js-nodejs/1.1.1'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -3422,7 +3447,9 @@
           // does not contain `_kmd.authtoken`. Therefore, extract it from the
           // stale copy.
           user._kmd = user._kmd || {};
-          user._kmd.authtoken = Kinvey.getActiveUser()._kmd.authtoken;
+          if(null == user._kmd.authtoken) {
+            user._kmd.authtoken = Kinvey.getActiveUser()._kmd.authtoken;
+          }
 
           // Set and return the active user.
           Kinvey.setActiveUser(user);
@@ -6549,14 +6576,6 @@
         // Debug.
         if(KINVEY_DEBUG) {
           log('Counting the number of documents pending synchronization.', arguments);
-        }
-
-        // Validate preconditions.
-        if(!Kinvey.Sync.isOnline()) {
-          var error = clientError(Kinvey.Error.SYNC_ERROR, {
-            debug: 'Sync is not enabled, or the application resides in offline mode.'
-          });
-          return Kinvey.Defer.reject(error);
         }
 
         // Cast arguments.
