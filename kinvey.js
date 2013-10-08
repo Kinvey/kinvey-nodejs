@@ -104,7 +104,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.1.1';
+    Kinvey.SDK_VERSION = '1.1.2';
 
     // Properties.
     // -----------
@@ -139,6 +139,7 @@
     // The namespaces of the Kinvey service.
     var DATA_STORE = 'appdata';
     var FILES = 'blob';
+    var PUSH = 'push';
     var RPC = 'rpc';
     var USERS = 'user';
     /*var USER_GROUPS = 'group';*/
@@ -1488,7 +1489,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.1.1'];
+      var parts = ['js-nodejs/1.1.2'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -3299,12 +3300,6 @@
           log('Logging in an existing user.', arguments);
         }
 
-        // Validate preconditions.
-        if(null !== Kinvey.getActiveUser()) {
-          var error = clientError(Kinvey.Error.ALREADY_LOGGED_IN);
-          return Kinvey.Defer.reject(error);
-        }
-
         // Cast arguments.
         if(isObject(usernameOrData)) {
           options = 'undefined' !== typeof options ? options : password;
@@ -3321,6 +3316,12 @@
         if(null == usernameOrData.username && null == usernameOrData.password &&
           null == usernameOrData._socialIdentity) {
           throw new Kinvey.Error('Argument must contain: username and password, or _socialIdentity.');
+        }
+
+        // Validate preconditions.
+        if(null !== Kinvey.getActiveUser()) {
+          var error = clientError(Kinvey.Error.ALREADY_LOGGED_IN);
+          return wrapCallbacks(Kinvey.Defer.reject(error), options);
         }
 
         // Login with the specified credentials.
@@ -3644,7 +3645,7 @@
         // If `options.state`, validate preconditions.
         if(false !== options.state && null !== Kinvey.getActiveUser()) {
           var error = clientError(Kinvey.Error.ALREADY_LOGGED_IN);
-          return Kinvey.Defer.reject(error);
+          return wrapCallbacks(Kinvey.Defer.reject(error), options);
         }
 
         // Create the new user.
@@ -6678,8 +6679,8 @@
           }
 
           // Return the response.
-          promise.then(null, options.error);
-          return promise;
+          delete options.success;
+          return wrapCallbacks(promise, options);
         }
 
         // Prepare the response.
