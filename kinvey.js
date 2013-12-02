@@ -104,7 +104,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.1.2';
+    Kinvey.SDK_VERSION = '1.1.3';
 
     // Properties.
     // -----------
@@ -317,6 +317,9 @@
       Kinvey.appKey = options.appKey;
       Kinvey.appSecret = null != options.appSecret ? options.appSecret : null;
       Kinvey.masterSecret = null != options.masterSecret ? options.masterSecret : null;
+
+      // Set the encryption key.
+      Kinvey.encryptionKey = null != options.encryptionKey ? options.encryptionKey : null;
 
       // Initialize the synchronization namespace and restore the active user.
       var promise = Kinvey.Sync.init(options.sync).then(function() {
@@ -666,6 +669,83 @@
      */
     Kinvey.Error.NOT_IMPLEMENTED_ERROR = 'NotImplementedError';
 
+    /**
+     * @memberof Kinvey.Error
+     * @constant
+     * @default
+     */
+    Kinvey.Error.EMAIL_VERIFICATION_REQUIRED = 'EmailVerificationRequired';
+
+    /**
+     * @memberof Kinvey.Error
+     * @constant
+     * @default
+     */
+    Kinvey.Error.SORT_LIMIT_EXCEEDED = 'SortLimitExceeded';
+
+    /**
+     * @memberof Kinvey.Error
+     * @constant
+     * @default
+     */
+    Kinvey.Error.INVALID_SHORT_URL = 'InvalidShortURL';
+
+    /**
+     * @memberof Kinvey.Error
+     * @constant
+     * @default
+     */
+    Kinvey.Error.INVALID_OR_MISSING_NONCE = 'InvalidOrMissingNonce';
+
+    /**
+     * @memberof Kinvey.Error
+     * @constant
+     * @default
+     */
+    Kinvey.Error.MISSING_CONFIGURATION = 'MissingConfiguration';
+
+    /**
+     * @memberof Kinvey.Error
+     * @constant
+     * @default
+     */
+    Kinvey.Error.ENDPOINT_DOES_NOT_EXIST = 'EndpointDoesNotExist';
+
+    /**
+     * @memberof Kinvey.Error
+     * @constant
+     * @default
+     */
+    Kinvey.Error.DISALLOWED_QUERY_SYNTAX = 'DisallowedQuerySyntax';
+
+    /**
+     * @memberof Kinvey.Error
+     * @constant
+     * @default
+     */
+    Kinvey.Error.MALFORMED_AUTHENTICATION_HEADER = 'MalformedAuthenticationHeader';
+
+    /**
+     * @memberof Kinvey.Error
+     * @constant
+     * @default
+     */
+    Kinvey.Error.APP_ARCHIVED = 'AppArchived';
+
+    /**
+     * @memberof Kinvey.Error
+     * @constant
+     * @default
+     */
+    Kinvey.Error.BL_NOT_SUPPORTED_FOR_ROUTE = 'BLNotSupportedForRoute';
+
+    /**
+     * @memberof Kinvey.Error
+     * @constant
+     * @default
+     */
+    Kinvey.Error.USER_LOCKED_DOWN = 'UserLockedDown';
+
     // #### Client.
     /**
      * @memberOf Kinvey.Error
@@ -750,7 +830,8 @@
     ClientError[Kinvey.Error.ALREADY_LOGGED_IN] = {
       name: Kinvey.Error.ALREADY_LOGGED_IN,
       description: 'You are already logged in with another user.',
-      debug: 'If you want to switch users, logout the active user first ' + 'using `Kinvey.User.logout`, then try again.'
+      debug: 'If you want to switch users, logout the active user first ' +
+        'using `Kinvey.User.logout`, then try again.'
     };
 
     /**
@@ -802,7 +883,8 @@
     ClientError[Kinvey.Error.NO_ACTIVE_USER] = {
       name: Kinvey.Error.NO_ACTIVE_USER,
       description: 'You need to be logged in to execute this request.',
-      debug: 'Try creating a user using `Kinvey.User.signup`, or login an ' + 'existing user using `Kinvey.User.login`.'
+      debug: 'Try creating a user using `Kinvey.User.signup`, or login an ' +
+        'existing user using `Kinvey.User.login`.'
     };
 
     /**
@@ -1489,7 +1571,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.1.2'];
+      var parts = ['js-nodejs/1.1.3'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -3387,7 +3469,8 @@
             auth: Auth.Session
           }, options).then(null, function(error) {
             // If `options.force`, clear the active user on `INVALID_CREDENTIALS`.
-            if(options.force && Kinvey.Error.INVALID_CREDENTIALS === error.name) {
+            if(options.force && (Kinvey.Error.INVALID_CREDENTIALS === error.name ||
+              Kinvey.Error.EMAIL_VERIFICATION_REQUIRED === error.name)) {
               // Debug.
               if(KINVEY_DEBUG) {
                 log('The user credentials are invalid. Returning success because of the force flag.');
@@ -6117,10 +6200,23 @@
             return Kinvey.Defer.reject(response);
           });
 
-          // Add a descriptive message to `InvalidCredentials` error so the user
-          // knows what’s going on.
+          // Handle certain errors.
           return response.then(null, function(error) {
-            if(Kinvey.Error.INVALID_CREDENTIALS === error.name) {
+            if(Kinvey.Error.USER_LOCKED_DOWN === error.name) {
+              // Clear user credentials.
+              Kinvey.setActiveUser(null);
+
+              // Clear the cache, and return the original error.
+              if('undefined' !== typeof Database) {
+                var fn = function() {
+                  Kinvey.Defer.reject(error);
+                };
+                return Kinvey.Sync.destruct().then(fn, fn);
+              }
+            }
+            else if(Kinvey.Error.INVALID_CREDENTIALS === error.name) {
+              // Add a descriptive message to `InvalidCredentials` error so the user
+              // knows what’s going on.
               error.debug += ' It is possible the tokens used to execute the ' +
                 'request are expired. In that case, please run ' +
                 '`Kinvey.User.logout({ force: true })`, and then log back in ' +
