@@ -1,5 +1,5 @@
 /*!
- * Copyright (c) 2013 Kinvey, Inc.
+ * Copyright (c) 2014 Kinvey, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,7 +104,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.1.3';
+    Kinvey.SDK_VERSION = '1.1.4';
 
     // Properties.
     // -----------
@@ -139,7 +139,7 @@
     // The namespaces of the Kinvey service.
     var DATA_STORE = 'appdata';
     var FILES = 'blob';
-    var PUSH = 'push';
+    /*var PUSH = 'push';*/
     var RPC = 'rpc';
     var USERS = 'user';
     /*var USER_GROUPS = 'group';*/
@@ -1571,7 +1571,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.1.3'];
+      var parts = ['js-nodejs/1.1.4'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -4503,7 +4503,7 @@
        * @param {string} field Field.
        * @param {RegExp|string} regExp Regular expression.
        * @param {Object} [options] Options.
-       * @param {boolean} [options.ignoreCase=inherit] Toggles case insensitivity.
+       * @param {boolean} [options.ignoreCase=inherit] Toggles case-insensitivity.
        * @param {boolean} [options.multiline=inherit] Toggles multiline matching.
        * @param {boolean} [options.extended=false] Toggles extended capability.
        * @param {boolean} [options.dotMatchesAll=false] Toggles dot matches all.
@@ -4514,13 +4514,18 @@
         if(!isRegExp(regExp)) {
           regExp = new RegExp(regExp);
         }
+        options = options || {};
+
+        // Validate arguments.
+        if((regExp.ignoreCase || options.ignoreCase) && false !== options.ignoreCase) {
+          throw new Error('ignoreCase flag is not supported.');
+        }
+        if(0 !== regExp.source.indexOf('^')) {
+          throw new Error('regExp must be an anchored expression.');
+        }
 
         // Flags.
-        options = options || {};
         var flags = [];
-        if((regExp.ignoreCase || options.ignoreCase) && false !== options.ignoreCase) {
-          flags.push('i');
-        }
         if((regExp.multiline || options.multiline) && false !== options.multiline) {
           flags.push('m');
         }
@@ -6145,7 +6150,10 @@
             options
           ).then(function(response) {
             // Parse the response.
-            response = JSON.parse(response);
+            try {
+              response = JSON.parse(response);
+            }
+            catch(e) {}
 
             // Debug.
             if(KINVEY_DEBUG && options.trace && isObject(response)) {
@@ -6155,17 +6163,17 @@
             return options.trace && isObject(response) ? response.result : response;
           }, function(response) {
             // Parse the response.
-            var requestId = null;
             try {
               response = JSON.parse(response);
-
-              // If `options.trace`, extract result and headers from the response.
-              if(options.trace) {
-                requestId = response.headers['X-Kinvey-Request-Id'];
-                response = response.result;
-              }
             }
             catch(e) {}
+
+            // If `options.trace`, extract result and headers from the response.
+            var requestId = null;
+            if(options.trace) {
+              requestId = response.headers['X-Kinvey-Request-Id'];
+              response = response.result;
+            }
 
             // Format the response as client-side error object.
             if(null != response && null != response.error) { // Server-side error.
@@ -6445,11 +6453,13 @@
         }).then(function(response) {
           // Step 2: categorize the documents in the collection.
           var promises = identifiers.map(function(id) {
+            var metadata = {
+              id: id,
+              timestamp: documents[id]
+            };
             return Sync._document(
-              collection, {
-                id: id,
-                timestamp: documents[id]
-              }, // The document metadata.
+              collection,
+              metadata, // The document metadata.
               response.local[id] || null, // The local document.
               response.net[id] || null, // The net document.
               options
@@ -6924,6 +6934,13 @@
         return Kinvey.Defer.resolve(net);
       }
     };
+
+    // `setImmediate` is not available in Node.js <= 0.8.
+    if('function' !== typeof setImmediate) {
+      /*jshint -W020*/
+      setImmediate = process.nextTick;
+      /*jshint +W020*/
+    }
 
     // Use promiscuous as `Kinvey.Defer` adapter.
     var promiscuous = require('promiscuous');
