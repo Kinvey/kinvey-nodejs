@@ -104,7 +104,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.1.4';
+    Kinvey.SDK_VERSION = '1.1.5';
 
     // Properties.
     // -----------
@@ -982,6 +982,28 @@
     // Utils.
     // ------
 
+    // Helper function to get and set a nested property in a document.
+    var nested = function(document, dotProperty, value) {
+      if(!dotProperty) { // Top-level document.
+        document = 'undefined' === typeof value ? document : value;
+        return document;
+      }
+
+      var obj = document;
+      var parts = dotProperty.split('.');
+
+      // Traverse the document until the nested property is located.
+      var current;
+      while((current = parts.shift()) && null != obj && obj.hasOwnProperty(current)) {
+        if(0 === parts.length) { // Return the (new) property value.
+          obj[current] = 'undefined' === typeof value ? obj[current] : value;
+          return obj[current];
+        }
+        obj = obj[current]; // Continue traversing.
+      }
+      return null; // Property not found.
+    };
+
     // Use the fastest possible means to execute a task in a future turn of the
     // event loop. Borrowed from [q](http://documentup.com/kriskowal/q/).
     var nextTick;
@@ -1571,7 +1593,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.1.4'];
+      var parts = ['js-nodejs/1.1.5'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -4895,26 +4917,29 @@
         }
 
         // Sorting.
-        // NOTE Sorting on dot-separated (nested) fields is not supported.
         var _this = this;
         response = response.sort(function(a, b) {
           for(var field in _this._sort) {
             if(_this._sort.hasOwnProperty(field)) {
+              // Find field in objects.
+              var aField = nested(a, field);
+              var bField = nested(b, field);
+
               // Elements which do not contain the field should always be sorted
               // lower.
-              if('undefined' !== typeof a[field] && 'undefined' === typeof b[field]) {
+              if(null != aField && null == bField) {
                 return -1;
               }
-              if('undefined' !== typeof b[field] && 'undefined' === typeof a[field]) {
+              if(null != bField && null == aField) {
                 return 1;
               }
 
               // Sort on the current field. The modifier adjusts the sorting order
               // (ascending (-1), or descending(1)). If the fields are equal,
               // continue sorting based on the next field (if any).
-              if(a[field] !== b[field]) {
+              if(aField !== bField) {
                 var modifier = _this._sort[field]; // 1 or -1.
-                return(a[field] < b[field] ? -1 : 1) * modifier;
+                return(aField < bField ? -1 : 1) * modifier;
               }
             }
           }
@@ -4931,28 +4956,6 @@
 
     // Relational Data.
     // ----------------
-
-    // Helper function to get and set a nested property in a document.
-    var nested = function(document, dotProperty, value) {
-      if(!dotProperty) { // Top-level document.
-        document = 'undefined' === typeof value ? document : value;
-        return document;
-      }
-
-      var obj = document;
-      var parts = dotProperty.split('.');
-
-      // Traverse the document until the nested property is located.
-      var current;
-      while((current = parts.shift()) && null != obj && obj.hasOwnProperty(current)) {
-        if(0 === parts.length) { // Return the (new) property value.
-          obj[current] = 'undefined' === typeof value ? obj[current] : value;
-          return obj[current];
-        }
-        obj = obj[current]; // Continue traversing.
-      }
-      return null; // Property not found.
-    };
 
     /**
      * @private
@@ -5253,6 +5256,90 @@
       options.offline = isEnabled && (!isOnline || options.offline);
       options.refresh = isEnabled && isOnline && false !== options.refresh;
       return options;
+    };
+
+    // Define a namespace to control local data expiration through a maxAge mechanism.
+    var maxAge = {
+      /**
+       * Adds maxAge metadata entries.
+       *
+       * @param {Array|Object} data List of objects.
+       * @param {integer} [maxAge] maximum age (seconds).
+       * @returns {Array|Object} Mutated list of objects.
+       */
+      addMetadata: function(data, maxAge) {
+        var lastRefreshedAt = new Date().toISOString();
+        var multi = isArray(data);
+
+        var response = multi ? data : [data];
+        response = response.map(function(item) {
+          if(null != item) {
+            item._kmd = item._kmd || {};
+            item._kmd.lastRefreshedAt = lastRefreshedAt;
+            if(null != maxAge) {
+              item._kmd.maxAge = maxAge;
+            }
+          }
+          return item;
+        });
+        return multi ? response : response[0];
+      },
+
+      /**
+       * Removes maxAge metadata entries.
+       *
+       * @param {Array|Object} data List of objects.
+       * @returns {Array|Object} Mutated list of objects.
+       */
+      removeMetadata: function(data) {
+        var multi = isArray(data);
+        var response = multi ? data : [data];
+        response = response.map(function(item) {
+          if(null != item && null != item._kmd) {
+            delete item._kmd.lastRefreshedAt;
+            delete item._kmd.maxAge;
+          }
+          return item;
+        });
+        return multi ? response : response[0];
+      },
+
+      /**
+       * Returns data maxAge status.
+       *
+       * @param {Array|Object} data List of objects.
+       * @param {integer} [maxAge] Maximum age (optional).
+       * @returns {boolean|Object} Status, or object if refresh is needed.
+       */
+      status: function(data, maxAge) {
+        var needsRefresh = false;
+        var response = isArray(data) ? data : [data];
+
+        var length = response.length;
+        var now = new Date().getTime();
+        for(var i = 0; i < length; i += 1) {
+          var item = response[i];
+          if(null != item && null != item._kmd && null != item._kmd.lastRefreshedAt) {
+            var itemMaxAge = (maxAge || item._kmd.maxAge) * 1000; // Milliseconds.
+            var lastRefreshedAt = fromISO(item._kmd.lastRefreshedAt).getTime();
+            var threshold = lastRefreshedAt + itemMaxAge;
+
+            // Verify time.
+            if(now > threshold) {
+              return false;
+            }
+
+            // Verify whether refresh is required.
+            var refreshThreshold = lastRefreshedAt + itemMaxAge * 0.9; // 90%
+            if(now > refreshThreshold) {
+              needsRefresh = true;
+            }
+          }
+        }
+        return needsRefresh ? {
+          refresh: true
+        } : true;
+      }
     };
 
     /**
@@ -5730,6 +5817,9 @@
           return Database.group(collection, request.data, options);
         }
 
+        // Add maxAge metadata.
+        request.data = maxAge.addMetadata(request.data, options.maxAge);
+
         // (Batch) save.
         var method = isArray(request.data) ? 'batch' : 'save';
         var promise = Database[method](collection, request.data, options);
@@ -5800,10 +5890,34 @@
           promise = Database.get(collection, request.id, options);
         }
         return promise.then(function(response) {
+          // Force refresh is maxAge of response data was exceeded.
+          var status = maxAge.status(response);
+          if(false === status && Kinvey.Sync.isOnline()) {
+            options.offline = false; // Force using network.
+            return Kinvey.Persistence.read(request, options);
+          }
+
           // Add support for references.
           if(options.relations) {
-            return KinveyReference.get(response, options);
+            return KinveyReference.get(response, options).then(function(response) {
+              // Refresh in the background if required.
+              if(true === status.refresh && Kinvey.Sync.isOnline()) {
+                options.offline = false; // Force using network.
+                Kinvey.Persistence.read(request, options);
+              }
+
+              // Return the response.
+              return response;
+            });
           }
+
+          // Refresh in the background if required.
+          if(true === status.refresh && Kinvey.Sync.isOnline()) {
+            options.offline = false; // Force using network.
+            Kinvey.Persistence.read(request, options);
+          }
+
+          // Return the response.
           return response;
         });
       },
@@ -5826,6 +5940,9 @@
 
         // Normalize “collections” of the user namespace.
         var collection = USERS === request.namespace ? USERS : request.collection;
+
+        // Add maxAge metadata.
+        request.data = maxAge.addMetadata(request.data, options.maxAge);
 
         // All update operations change application data, and are therefore subject
         // to synchronization.
@@ -5920,6 +6037,9 @@
           log('Initiating a create request.', arguments);
         }
 
+        // Strip maxAge metadata.
+        request.data = maxAge.removeMetadata(request.data);
+
         // Initiate the network request.
         request.method = 'POST';
         return Kinvey.Persistence.Net._request(request, options);
@@ -5983,6 +6103,9 @@
         if(KINVEY_DEBUG) {
           log('Initiating an update request.', arguments);
         }
+
+        // Strip maxAge metadata.
+        request.data = maxAge.removeMetadata(request.data);
 
         // Initiate the network request.
         request.method = 'PUT';
@@ -6943,8 +7066,17 @@
     }
 
     // Use promiscuous as `Kinvey.Defer` adapter.
-    var promiscuous = require('promiscuous');
-    Kinvey.Defer.use(promiscuous);
+    var Promise = require('promiscuous');
+    Kinvey.Defer.use({
+      deferred: function() {
+        var deferred = {};
+        deferred.promise = new Promise(function(resolve, reject) {
+          deferred.resolve = resolve;
+          deferred.reject = reject;
+        });
+        return deferred;
+      }
+    });
 
     // `Kinvey.Persistence.Net` adapter for [Node.js](http://nodejs.org/).
     var NodeHttp = {

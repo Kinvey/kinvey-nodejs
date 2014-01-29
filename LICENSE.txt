@@ -179,7 +179,7 @@
 
 Summary:
 
-   * promiscuous-0.4 [MIT] - used for promises.
+   * promiscuous-0.6 [MIT] - used for promises.
 
 SECTION 1: BSD-STYLE, MIT-STYLE, OR SIMILAR STYLE LICENSES
    >>> promiscuous
