@@ -104,7 +104,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.1.7';
+    Kinvey.SDK_VERSION = '1.1.8';
 
     // Properties.
     // -----------
@@ -1045,8 +1045,8 @@
     // Create helper functions that are used throughout the library. Inspired by
     // [underscore.js](http://underscorejs.org/).
     var isArray = Array.isArray || function(arg) {
-        return '[object Array]' === Object.prototype.toString.call(arg);
-      };
+      return '[object Array]' === Object.prototype.toString.call(arg);
+    };
     var isFunction = function(fn) {
       if('function' !== typeof / . / ) {
         return 'function' === typeof fn;
@@ -1595,7 +1595,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.1.7'];
+      var parts = ['js-nodejs/1.1.8'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -3390,6 +3390,30 @@
       },
 
       /**
+       * Signs up a new user through a provider.
+       *
+       * @param {string} provider  Provider.
+       * @param {Object} tokens    Tokens.
+       * @param {Object} [options] Options.
+       * @returns {Promise} The active user.
+       */
+      signupWithProvider: function(provider, tokens, options) {
+        // Debug.
+        if(KINVEY_DEBUG) {
+          log('Signing up a new user with a provider.', arguments);
+        }
+
+        // Parse tokens.
+        var data = {
+          _socialIdentity: {}
+        };
+        data._socialIdentity[provider] = tokens;
+
+        // Forward to `Kinvey.User.signup`.
+        return Kinvey.User.signup(data, options);
+      },
+
+      /**
        * Logs in an existing user.
        * NOTE If `options._provider`, this method should trigger a BL script.
        *
@@ -3462,10 +3486,34 @@
       },
 
       /**
+       * Logs in an existing user through a provider.
+       *
+       * @param {string} provider  Provider.
+       * @param {Object} tokens    Tokens.
+       * @param {Object} [options] Options.
+       * @returns {Promise} The active user.
+       */
+      loginWithProvider: function(provider, tokens, options) {
+        // Debug.
+        if(KINVEY_DEBUG) {
+          log('Logging in with a provider.', arguments);
+        }
+
+        // Parse tokens.
+        var data = {
+          _socialIdentity: {}
+        };
+        data._socialIdentity[provider] = tokens;
+
+        // Forward to `Kinvey.User.login`.
+        return Kinvey.User.login(data, options);
+      },
+
+      /**
        * Logs out the active user.
        *
        * @param {Options} [options] Options.
-       * @param {boolean] [options.force=false] Reset the active user even if an
+       * @param {boolean} [options.force=false] Reset the active user even if an
        *          `InvalidCredentials` error is returned.
        * @param {boolean} [options.silent=false] Succeed when there is no active
        *          user.
@@ -5058,7 +5106,8 @@
               var promises = (isArrayRelation ? reference : [reference]).map(function(member) {
                 // Do not retrieve if the property is not a reference, or it is
                 // explicitly excluded.
-                if(null == member || 'KinveyRef' !== member._type || -1 !== options.exclude.indexOf(property)) {
+                if(null == member || 'KinveyRef' !== member._type ||
+                  -1 !== options.exclude.indexOf(property)) {
                   return Kinvey.Defer.resolve(member);
                 }
 
@@ -5179,7 +5228,8 @@
               var promises = (isArrayRelation ? obj : [obj]).map(function(member) {
                 // Do not save if the property is not a document or a reference
                 // already, or it is explicitly excluded.
-                if(null == member || 'KinveyRef' === member._type || -1 !== options.exclude.indexOf(property)) {
+                if(null == member || 'KinveyRef' === member._type ||
+                  -1 !== options.exclude.indexOf(property)) {
                   return Kinvey.Defer.resolve(member);
                 }
 
@@ -5931,7 +5981,7 @@
         }
         return promise.then(function(response) {
           // Force refresh is maxAge of response data was exceeded.
-          var status = maxAge.status(response);
+          var status = maxAge.status(response, options.maxAge);
           if(false === status && Kinvey.Sync.isOnline()) {
             options.offline = false; // Force using network.
             return Kinvey.Persistence.read(request, options);
