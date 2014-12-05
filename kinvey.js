@@ -104,7 +104,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.1.8';
+    Kinvey.SDK_VERSION = '1.1.9';
 
     // Properties.
     // -----------
@@ -225,12 +225,12 @@
     };
 
     /**
- * Returns the active user.
- *
- * @throws {Error} `Kinvey.getActiveUser` can only be called after the promise
-     returned by `Kinvey.init` fulfills or rejects.
- * @returns {?Object} The active user, or `null` if there is no active user.
- */
+     * Returns the active user.
+     *
+     * @throws {Error} `Kinvey.getActiveUser` can only be called after the promise
+         returned by `Kinvey.init` fulfills or rejects.
+     * @returns {?Object} The active user, or `null` if there is no active user.
+     */
     Kinvey.getActiveUser = function() {
       // Validate preconditions.
       if(false === activeUserReady) {
@@ -1048,7 +1048,7 @@
       return '[object Array]' === Object.prototype.toString.call(arg);
     };
     var isFunction = function(fn) {
-      if('function' !== typeof / . / ) {
+      if('function' !== typeof /./) {
         return 'function' === typeof fn;
       }
       return '[object Function]' === Object.prototype.toString.call(fn);
@@ -1595,7 +1595,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.1.8'];
+      var parts = ['js-nodejs/1.1.9'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -3542,7 +3542,7 @@
           }, options).then(null, function(error) {
             // If `options.force`, clear the active user on `INVALID_CREDENTIALS`.
             if(options.force && (Kinvey.Error.INVALID_CREDENTIALS === error.name ||
-              Kinvey.Error.EMAIL_VERIFICATION_REQUIRED === error.name)) {
+                Kinvey.Error.EMAIL_VERIFICATION_REQUIRED === error.name)) {
               // Debug.
               if(KINVEY_DEBUG) {
                 log('The user credentials are invalid. Returning success because of the force flag.');
@@ -5042,6 +5042,17 @@
     // Relational Data.
     // ----------------
 
+    // Returns a shallow clone of the specified object.
+    var clone = function(object) {
+      var result = {};
+      for(var key in object) {
+        if(object.hasOwnProperty(key)) {
+          result[key] = object[key];
+        }
+      }
+      return result;
+    };
+
     /**
      * @private
      * @namespace KinveyReference
@@ -5064,7 +5075,7 @@
         // If a list of documents was passed in, retrieve all relations in parallel.
         if(isArray(document)) {
           var promises = document.map(function(member) {
-            return KinveyReference.get(member, options);
+            return KinveyReference.get(member, clone(options));
           });
           return Kinvey.Defer.all(promises);
         }
@@ -5083,59 +5094,103 @@
         delete options.relations;
         delete options.success;
 
-        // Re-order the relations in order of deepness, so the partial responses
-        // propagate properly. Moreover, relations with the same depth can safely
-        // be retrieved in parallel.
-        var properties = [];
+
+
+        // We need to build a relationship mapping object
+        // This is important because we might have to resolve
+        // relationships as objects inside an array of existing
+        // relationships.
+        //
+        // ala: 'month', 'month.days'
+        // with an array of every month as the relationship key
+        var relationMapping = {};
         Object.keys(relations).forEach(function(relation) {
-          var index = relation.split('.').length;
-          properties[index] = (properties[index] || []).concat(relation);
-        });
+          var mapping = relationMapping;
+          var relationSplit = relation.split('.');
+          var relationLength = relationSplit.length;
+          relationSplit.forEach(function(relationStep, index) {
+            if(!mapping.keys) {
+              mapping.keys = {};
+            }
+            if(!mapping.keys[relationStep]) {
+              mapping.keys[relationStep] = {};
+            }
 
-        // Prepare the response.
-        var promise = Kinvey.Defer.resolve(null);
+            mapping = mapping.keys[relationStep];
 
-        // Retrieve all (relational) documents. Starts with the top-level relations.
-        properties.forEach(function(relationalLevel) {
-          promise = promise.then(function() {
-            var promises = relationalLevel.map(function(property) {
-              var reference = nested(document, property); // The reference.
-
-              // Retrieve the relation(s) in parallel.
-              var isArrayRelation = isArray(reference);
-              var promises = (isArrayRelation ? reference : [reference]).map(function(member) {
-                // Do not retrieve if the property is not a reference, or it is
-                // explicitly excluded.
-                if(null == member || 'KinveyRef' !== member._type ||
-                  -1 !== options.exclude.indexOf(property)) {
-                  return Kinvey.Defer.resolve(member);
-                }
-
-                // Forward to the `Kinvey.User` or `Kinvey.DataStore` namespace.
-                var promise;
-                if(USERS === member._collection) {
-                  promise = Kinvey.User.get(member._id, options);
-                }
-                else {
-                  promise = Kinvey.DataStore.get(member._collection, member._id, options);
-                }
-
-                // Return the response.
-                return promise.then(null, function() {
-                  // If the retrieval failed, retain the reference.
-                  return Kinvey.Defer.resolve(member);
-                });
-              });
-
-              // Return the response.
-              return Kinvey.Defer.all(promises).then(function(responses) {
-                // Replace the references in the document with the relations.
-                nested(document, property, isArrayRelation ? responses : responses[0]);
-              });
-            });
-            return Kinvey.Defer.all(promises);
+            if(index === relationLength - 1) {
+              mapping.resolve = true;
+            }
           });
         });
+
+
+        //Recursively process relationships
+        var resolveRelationships = function(entity, relationMapping) {
+          if(relationMapping.keys) {
+            var relationshipPromises = [];
+
+            Object.keys(relationMapping.keys).forEach(function(key) {
+              var relationLevel = relationMapping.keys[key];
+              if(relationLevel.resolve) {
+                // Retrieve the relation(s) in parallel.
+                var isKeyArray = isArray(entity[key]);
+                var promises = (isKeyArray ? entity[key] : [entity[key]]).map(function(member) {
+                  // Do not retrieve if the property is not a reference, or it is
+                  // explicitly excluded.
+                  if(null == member || 'KinveyRef' !== member._type) {
+                    return Kinvey.Defer.resolve(member);
+                  }
+
+                  // Forward to the `Kinvey.User` or `Kinvey.DataStore` namespace.
+                  var promise;
+                  if(USERS === member._collection) {
+                    promise = Kinvey.User.get(member._id, options);
+                  }
+                  else {
+                    promise = Kinvey.DataStore.get(member._collection, member._id, options);
+                  }
+
+                  // Return the response.
+                  return promise.then(function(resolvedMember) {
+                    return resolveRelationships(resolvedMember, relationLevel).then(function() {
+                      return resolvedMember;
+                    }, function() {
+                      return resolvedMember;
+                    });
+                  }, function() {
+                    // If the retrieval failed, retain the reference.
+                    return Kinvey.Defer.resolve(member);
+                  });
+                });
+
+
+                relationshipPromises.push(
+                  Kinvey.Defer.all(promises)
+                  .then(function(relationshipEntities) {
+                    //Once finished we need to update the original entity with our results
+                    if(isKeyArray) {
+                      entity[key] = relationshipEntities;
+                    }
+                    else {
+                      entity[key] = relationshipEntities[0];
+                    }
+                  })
+                );
+              }
+              else {
+                relationshipPromises.push(resolveRelationships(entity[key], relationLevel));
+              }
+            });
+
+            return Kinvey.Defer.all(relationshipPromises);
+          }
+          else {
+            return Kinvey.Defer.resolve();
+          }
+        };
+
+        var promise = resolveRelationships(document, relationMapping);
 
         // All documents are retrieved.
         return promise.then(function() {
@@ -5161,6 +5216,7 @@
           options.success = success;
           return Kinvey.Defer.reject(reason);
         });
+
       },
 
       /**
@@ -5182,7 +5238,7 @@
         // If a list of documents was passed in, retrieve all relations in parallel.
         if(isArray(document)) {
           var promises = document.map(function(member) {
-            return KinveyReference.save(collection, member, options);
+            return KinveyReference.save(collection, member, clone(options));
           });
           return Kinvey.Defer.all(promises);
         }
