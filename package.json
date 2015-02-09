@@ -12,7 +12,7 @@
   "main"        : "./kinvey.js",
   "repository"  : {
     "type" : "git",
-    "url"  : "git@github.com:Kinvey/kinvey-nodejs.git"
+    "url"  : "https://github.com/Kinvey/kinvey-nodejs.git"
   },
   "dependencies": {
     "promiscuous": "~0.6"
