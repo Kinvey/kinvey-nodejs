@@ -1,5 +1,5 @@
 /*!
- * Copyright (c) 2014 Kinvey, Inc.
+ * Copyright (c) 2015 Kinvey, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,7 +104,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.1.9';
+    Kinvey.SDK_VERSION = '1.1.11';
 
     // Properties.
     // -----------
@@ -1595,7 +1595,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.1.9'];
+      var parts = ['js-nodejs/1.1.11'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
