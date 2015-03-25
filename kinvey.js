@@ -106,7 +106,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.1.13';
+    Kinvey.SDK_VERSION = '1.2.0';
 
     // Properties.
     // -----------
@@ -144,6 +144,7 @@
     /*var PUSH = 'push';*/
     var RPC = 'rpc';
     var USERS = 'user';
+    var CRP_MAX_BYTES = 2000;
     /*var USER_GROUPS = 'group';*/
 
     // The library has a concept of an active user which represents the person
@@ -288,6 +289,8 @@
      * Initializes the library for use with Kinvey services.
      *
      * @param {Options}  options Options.
+     * @param {string}  [options.clientAppVersion]   Client App Version.
+     * @param {Object}  [options.customRequestProperties] Customer request properties.
      * @param {string}  [options.apiHostName]  API Host Name. Must use the `https` protocol
      * @param {string}   options.appKey        App Key.
      * @param {string}  [options.appSecret]    App Secret.
@@ -328,6 +331,16 @@
           ' Kinvey.APIHostName, instead found the protocol ' +
           Kinvey.APIHostName.substring(0, Kinvey.APIHostName.indexOf(':/')) +
           ' in Kinvey.APIHostName: ' + Kinvey.APIHostName);
+      }
+
+      // Set the Client App Version
+      if(options.clientAppVersion != null) {
+        Kinvey.ClientAppVersion.setVersion(options.clientAppVersion);
+      }
+
+      // Set the custom request properties
+      if(options.customRequestProperties != null) {
+        Kinvey.CustomRequestProperties.setProperties(options.customRequestProperties);
       }
 
       // Save credentials.
@@ -1085,6 +1098,9 @@
     var isString = function(str) {
       return '[object String]' === Object.prototype.toString.call(str);
     };
+    // var isEmptyString = String.isEmpty = function(str) {
+    //   return isString(str) && (str.length === 0 || !str.trim());
+    // };
 
     var isEmpty = function(obj) {
       if(null == obj) {
@@ -1139,6 +1155,22 @@
           };
         });
       };
+    };
+
+    // Gets the byte count for a string
+    var getByteCount = function(str) {
+      var count = 0,
+        stringLength = str.length,
+        i;
+
+      str = String(str || '');
+
+      for(i = 0; i < stringLength; i++) {
+        var partCount = encodeURI(str[i]).split('%').length;
+        count += partCount === 1 ? 1 : partCount - 1;
+      }
+
+      return count;
     };
 
     // Define the request Option type for documentation purposes.
@@ -1258,6 +1290,7 @@
        */
       use: use(['_destroy', '_get', '_save'])
     };
+
 
     // Deferreds.
     // ----------
@@ -1625,7 +1658,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.1.13'];
+      var parts = ['js-nodejs/1.2.0'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -1640,6 +1673,219 @@
         })
       ).join(' ');
     };
+
+    // Client App Version
+    // ----
+
+    // Set app version for the application.
+
+    var clientAppVersion;
+
+    var parseAppVersion = function() {
+      var version = arguments[0];
+
+      // Set app version using specified major, minor, and patch
+      // provided as arguments.
+      if(arguments.length > 1) {
+        // Get individual parts of app version
+        var major = arguments[0];
+        var minor = arguments[1];
+        var patch = arguments[2];
+
+        // Set app version to major value
+        version = (major + '').trim();
+
+        // Append minor value if it was provided
+        if(minor != null) {
+          version += ('.' + minor).trim();
+        }
+
+        // Append patch value if it was provided
+        if(patch != null) {
+          version += ('.' + patch).trim();
+        }
+      }
+
+      return version;
+    };
+
+    var stringifyAppVersion = function(version) {
+      if(null == version) {
+        return undefined;
+      }
+
+      return(version + '').trim();
+    };
+
+    var clearClientAppVersion = function() {
+      clientAppVersion = undefined;
+    };
+
+    /**
+     * @memberof! <global>
+     * @namespace Kinvey.ClientAppVersion
+     */
+    Kinvey.ClientAppVersion = /** @lends Kinvey.ClientAppVersion */ {
+
+      /**
+       * Returns a string representation of the client app version or
+       * `undefined` if one has not been set.
+       *
+       * @return {?string} A string representation of the client app
+       *                   version or `undefined`.
+       */
+      stringValue: function() {
+        return stringifyAppVersion(clientAppVersion);
+      },
+
+      /**
+       * Sets the client app version for the application.
+       */
+      setVersion: function() {
+        Kinvey.ClientAppVersion.clear();
+
+        // Debug
+        if(KINVEY_DEBUG) {
+          log('Setting the client app version.', arguments);
+        }
+
+        clientAppVersion = parseAppVersion.apply(root, arguments);
+      },
+
+      /**
+       * Clears the client app version that is set for the application.
+       */
+      clear: function() {
+        // Debug
+        if(KINVEY_DEBUG) {
+          log('Clearing the client app version.');
+        }
+
+        clearClientAppVersion();
+      }
+    };
+
+
+
+    // Custom Request Properties
+    // ----
+
+    // Set and get custom request properties for the application.
+
+    var customRequestProperties = {};
+
+    var clearCustomRequestProperty = function(name) {
+      if(null != name && customRequestProperties.hasOwnProperty(name)) {
+        delete customRequestProperties[name];
+      }
+    };
+
+    var clearCustomRequestProperties = function() {
+      customRequestProperties = {};
+    };
+
+    /**
+     * @memberof! <global>
+     * @namespace Kinvey.CustomRequestProperties
+     */
+    Kinvey.CustomRequestProperties = /** @lends Kinvey.CustomRequestProperties */ {
+
+      /**
+       * Returns the custom request properties that have been set for the application.
+       * @return {Object} Custom request properties
+       */
+      properties: function() {
+        // Return a copy and not a reference
+        return JSON.parse(JSON.stringify(customRequestProperties));
+      },
+
+      /**
+       * Returns the custom request property for the name or `undefined` if
+       * it has not been set.
+       *
+       * @param  {string} name Custom request property name
+       * @return {*}           Custom request property value
+       */
+      property: function(name) {
+        if(null != name && customRequestProperties.hasOwnProperty(name)) {
+          return customRequestProperties[name];
+        }
+
+        return undefined;
+      },
+
+      /**
+       * Clears all custom request properties that were previously set
+       * for the application. Then sets the provided properties
+       * for the application.
+       *
+       * @param {Object} properties Custom request properties
+       */
+      setProperties: function(properties) {
+        Kinvey.CustomRequestProperties.clear();
+        Kinvey.CustomRequestProperties.addProperties(properties);
+      },
+
+      /**
+       * Sets the custom request property for the name and value.
+       *
+       * @param {string} name  Custom request property name
+       * @param {*}      value Custom request property value
+       */
+      setProperty: function(name, value) {
+        var properties = {};
+        properties[name] = value;
+        Kinvey.CustomRequestProperties.addProperties(properties);
+      },
+
+      /**
+       * Adds to the properties to the exisiting custom request properties
+       * replacing any that already existed.
+       *
+       * @param {Object} properties Custom request properties
+       */
+      addProperties: function(properties) {
+        if(properties != null) {
+          Object.keys(properties).forEach(function(name) {
+            var value = properties[name];
+
+            // Debug
+            if(KINVEY_DEBUG) {
+              log('Adding custom request property ' + name + ' as ' + value + '.');
+            }
+
+            customRequestProperties[name] = value;
+          });
+        }
+      },
+
+      /**
+       * Clears all the custom request properties.
+       */
+      clear: function() {
+        // Debug
+        if(KINVEY_DEBUG) {
+          log('Clearing the custom request properties.');
+        }
+
+        clearCustomRequestProperties();
+      },
+
+      /**
+       * Clears one custom request property.
+       *
+       * @param  {string} name Custom request property name
+       */
+      clearProperty: function(name) {
+        // Debug
+        if(KINVEY_DEBUG) {
+          log('Clearing the custom request property ' + name + '.');
+        }
+
+        clearCustomRequestProperty(name);
+      }
+    };
+
 
     // ACL.
     // ----
@@ -6509,6 +6755,10 @@
         };
 
         // Append optional headers.
+        options.clientAppVersion = options.clientAppVersion || Kinvey.ClientAppVersion.stringValue();
+        if(options.clientAppVersion != null) {
+          headers['X-Kinvey-Client-App-Version'] = (options.clientAppVersion + '');
+        }
         if(null != request.data) {
           headers['Content-Type'] = 'application/json; charset=utf-8';
         }
@@ -6522,6 +6772,40 @@
           headers['X-Kinvey-Include-Headers-In-Response'] = 'X-Kinvey-Request-Id';
           headers['X-Kinvey-ResponseWrapper'] = 'true';
         }
+
+        // Set the custom request properties for the request defaulting to an
+        // empty object.
+        options.customRequestProperties = options.customRequestProperties || {};
+
+        // Get globally set custom request properties.
+        var customRequestProperties = Kinvey.CustomRequestProperties.properties();
+
+        // If any custom request properties exist globally, merge them into the
+        // custom request properties for this request. Only global custom request
+        // properties that don't already exist for this request will be added.
+        // Global request properties do NOT overwrite existing custom request
+        // properties for the request.
+        if(customRequestProperties != null) {
+          Object.keys(customRequestProperties).forEach(function(name) {
+            if(!options.customRequestProperties.hasOwnProperty(name)) {
+              options.customRequestProperties[name] = customRequestProperties[name];
+            }
+          });
+        }
+
+        // Set X-Kinvey-Custom-Request-Properties to the JSON string of the custom
+        // request properties for the request. Checks to make sure the JSON string of
+        // the custom request properties is less then the max bytes allowed for custom
+        // request properties otherwise throws an error.
+        var customRequestPropertiesHeader = JSON.stringify(options.customRequestProperties);
+        var customRequestPropertiesByteCount = getByteCount(customRequestPropertiesHeader);
+        if(customRequestPropertiesByteCount >= CRP_MAX_BYTES) {
+          throw new Kinvey.Error('Custom request properties is ' + customRequestPropertiesByteCount +
+            '. It must be less then ' + CRP_MAX_BYTES + ' bytes.');
+        }
+
+        // Set the custom request properties header.
+        headers['X-Kinvey-Custom-Request-Properties'] = customRequestPropertiesHeader;
 
         // Debug.
         if(KINVEY_DEBUG) {
@@ -6830,8 +7114,34 @@
               metadata.size += 1;
             }
 
+            // Get metadata for the doucment.
             var timestamp = null != document._kmd ? document._kmd.lmt : null;
-            metadata.documents[document._id] = timestamp || null;
+            var clientAppVersion = options.clientAppVersion || Kinvey.ClientAppVersion.stringValue(),
+              customRequestProperties = options.customRequestProperties || {};
+
+            // Get globally set custom request properties.
+            var globalCustomRequestProperties = Kinvey.CustomRequestProperties.properties();
+
+            // If any custom request properties exist globally, merge them into the
+            // custom request properties for this document. Only global custom request
+            // properties that don't already exist for this document will be added.
+            // Global request properties do NOT overwrite existing custom request
+            // properties for the document.
+            if(globalCustomRequestProperties != null) {
+              Object.keys(globalCustomRequestProperties).forEach(function(name) {
+                // If the property is not already set then set it
+                if(!customRequestProperties.hasOwnProperty(name)) {
+                  customRequestProperties[name] = globalCustomRequestProperties[name];
+                }
+              });
+            }
+
+            // Store the metadata.
+            metadata.documents[document._id] = {
+              timestamp: timestamp,
+              clientAppVersion: clientAppVersion,
+              customRequestProperties: customRequestProperties
+            };
           });
 
           // Return the new metadata.
@@ -6852,63 +7162,24 @@
        * @returns {Promise} The response.
        */
       _collection: function(collection, documents, options) {
-        var error;
-
         // Prepare the response.
         var result = {
           collection: collection,
           success: [],
           error: []
         };
-
-        // Obtain the actual documents from local and net.
         var identifiers = Object.keys(documents);
-        var request = {
-          namespace: USERS === collection ? USERS : DATA_STORE,
-          collection: USERS === collection ? null : collection,
-          query: new Kinvey.Query().contains('_id', identifiers),
-          auth: Auth.Default
-        };
 
-        // Step 1: obtain the documents from local and net.
-        var promises = [
-          Kinvey.Persistence.Local.read(request, options),
-          Kinvey.Persistence.Net.read(request, options)
-        ];
-        return Kinvey.Defer.all(promises).then(function(responses) {
-          // `responses` is a list of documents. Re-format as object
-          // ( id => document ).
-          var response = {
-            local: {},
-            net: {}
-          };
-          responses[0].forEach(function(document) {
-            // Check document for property _id. Thrown error will reject promise.
-            if(document._id == null) {
-              error = new Kinvey.Error('Document does not have _id property defined. ' +
-                'It is required to do proper synchronization.');
-              throw error;
-            }
-
-            response.local[document._id] = document;
-          });
-          responses[1].forEach(function(document) {
-            // Check document for property _id. Thrown error will reject promise.
-            if(document._id == null) {
-              error = new Kinvey.Error('Document does not have _id property defined. ' +
-                'It is required to do proper synchronization.');
-              throw error;
-            }
-
-            response.net[document._id] = document;
-          });
-          return response;
-        }).then(function(response) {
+        // Read the documents
+        return Sync._read(collection, documents, options).then(function(response) {
           // Step 2: categorize the documents in the collection.
           var promises = identifiers.map(function(id) {
+            var document = documents[id];
             var metadata = {
               id: id,
-              timestamp: documents[id]
+              timestamp: document.timestamp,
+              clientAppVersion: document.clientAppVersion,
+              customRequestProperties: document.customRequestProperties
             };
             return Sync._document(
               collection,
@@ -6958,8 +7229,89 @@
             return metadata;
           }, options);
         }).then(function() {
+          //console.log(result);
           // Step 5: return the synchronization result.
           return result;
+        });
+      },
+
+      /**
+       * Reads the provided documents using both local and network persistence.
+       *
+       * @private
+       * @param {string} collection The collection.
+       * @param {Array} documents List of documents.
+       * @param {Options} [options] Options.
+       * @returns {Promise} The response.
+       */
+      _read: function(collection, documents, options) {
+        var identifiers = Object.keys(documents);
+        var promises = identifiers.map(function(id) {
+          var metadata = documents[id];
+          var requestOptions = options || {};
+
+          // Set options.clientAppVersion based on the metadata for the document
+          requestOptions.clientAppVersion = metadata.clientAppVersion != null ? metadata.clientAppVersion : null;
+
+          // Set options.customRequestProperties based on the metadata
+          // for the document
+          requestOptions.customRequestProperties = metadata.customRequestProperties != null ?
+            metadata.customRequestProperties : null;
+
+          // Build the request.
+          var request = {
+            namespace: USERS === collection ? USERS : DATA_STORE,
+            collection: USERS === collection ? null : collection,
+            query: new Kinvey.Query().contains('_id', [id]),
+            auth: Auth.Default
+          };
+
+          // Read from local and net in parallel.
+          return Kinvey.Defer.all([
+            Kinvey.Persistence.Local.read(request, requestOptions),
+            Kinvey.Persistence.Net.read(request, requestOptions)
+          ]).then(function(responses) {
+            return {
+              local: responses[0],
+              net: responses[1]
+            };
+          });
+        });
+
+        return Kinvey.Defer.all(promises).then(function(responses) {
+          var response = {
+            local: {},
+            net: {}
+          };
+          var error;
+
+          responses.forEach(function(composite) {
+            var locals = composite.local;
+            var nets = composite.net;
+
+            locals.forEach(function(document) {
+              // Check document for property _id. Thrown error will reject promise.
+              if(document._id == null) {
+                error = new Kinvey.Error('Document does not have _id property defined. ' +
+                  'It is required to do proper synchronization.');
+                throw error;
+              }
+
+              response.local[document._id] = document;
+            });
+            nets.forEach(function(document) {
+              // Check document for property _id. Thrown error will reject promise.
+              if(document._id == null) {
+                error = new Kinvey.Error('Document does not have _id property defined. ' +
+                  'It is required to do proper synchronization.');
+                throw error;
+              }
+
+              response.net[document._id] = document;
+            });
+          });
+
+          return response;
         });
       },
 
@@ -6973,43 +7325,60 @@
        * @returns {Array} List of document ids.
        */
       _destroy: function(collection, documents, options) {
-        // Cast arguments.
-        documents = documents.map(function(composite) {
-          return composite.id;
+        var promises = documents.map(function(composite) {
+          var id = composite.id;
+          var metadata = composite.metadata;
+          var requestOptions = options || {};
+
+          // Set options.clientAppVersion based on the metadata for the document
+          requestOptions.clientAppVersion = metadata.clientAppVersion != null ? metadata.clientAppVersion : null;
+
+          // Set options.customRequestProperties based on the metadata
+          // for the document
+          requestOptions.customRequestProperties = metadata.customRequestProperties != null ?
+            metadata.customRequestProperties : null;
+
+          // Build the request.
+          var request = {
+            namespace: USERS === collection ? USERS : DATA_STORE,
+            collection: USERS === collection ? null : collection,
+            query: new Kinvey.Query().contains('_id', [id]),
+            auth: Auth.Default
+          };
+
+          // Delete from local and net in parallel. Deletion is an atomic action,
+          // therefore the documents will either all be part of `success` or `error`.
+          var promises = [
+            Kinvey.Persistence.Local.destroy(request, requestOptions),
+            Kinvey.Persistence.Net.destroy(request, requestOptions)
+          ];
+
+          return Kinvey.Defer.all(promises).then(function() {
+            return {
+              success: [id],
+              error: []
+            };
+          }, function() {
+            return {
+              success: [],
+              error: [id]
+            };
+          });
         });
 
-        // If there are no documents to delete, resolve immediately.
-        if(0 === documents.length) {
-          return Kinvey.Defer.resolve({
+        // Return one result for all the delete requests
+        return Kinvey.Defer.all(promises).then(function(responses) {
+          var result = {
             success: [],
             error: []
+          };
+
+          responses.forEach(function(response) {
+            result.success = result.success.concat(response.success);
+            result.error = result.error.concat(response.error);
           });
-        }
 
-        // Build the request.
-        var request = {
-          namespace: USERS === collection ? USERS : DATA_STORE,
-          collection: USERS === collection ? null : collection,
-          query: new Kinvey.Query().contains('_id', documents),
-          auth: Auth.Default
-        };
-
-        // Delete from local and net in parallel. Deletion is an atomic action,
-        // therefore the documents will either all be part of `success` or `error`.
-        var promises = [
-          Kinvey.Persistence.Local.destroy(request, options),
-          Kinvey.Persistence.Net.destroy(request, options)
-        ];
-        return Kinvey.Defer.all(promises).then(function() {
-          return {
-            success: documents,
-            error: []
-          };
-        }, function() {
-          return {
-            success: [],
-            error: documents
-          };
+          return result;
         });
       },
 
@@ -7066,7 +7435,8 @@
         if(null === net || (null != net._kmd && metadata.timestamp === net._kmd.lmt)) {
           return Kinvey.Defer.resolve({
             id: metadata.id,
-            document: local
+            document: local,
+            metadata: metadata
           });
         }
 
@@ -7078,18 +7448,21 @@
           return options.conflict(collection, local, net).then(function(document) {
             return {
               id: metadata.id,
-              document: document
+              document: document,
+              metadata: metadata
             };
           }, function() {
             return Kinvey.Defer.reject({
               id: metadata.id,
-              document: [local, net]
+              document: [local, net],
+              metadata: metadata
             });
           });
         }
         return Kinvey.Defer.reject({
           id: metadata.id,
-          document: [local, net]
+          document: [local, net],
+          metadata: metadata
         });
       },
 
@@ -7103,21 +7476,28 @@
        * @returns {Array} List of document ids.
        */
       _save: function(collection, documents, options) {
-        // Cast arguments.
-        documents = documents.map(function(composite) {
-          return composite.document;
-        });
-
         // Save documents on net.
         var error = []; // Track errors of individual update operations.
-        var promises = documents.map(function(document) {
+        var promises = documents.map(function(composite) {
+          var document = composite.document;
+          var metadata = composite.metadata;
+          var requestOptions = options || {};
+
+          // Set requestOptions.appVersion based on the metadata for the document
+          requestOptions.clientAppVersion = metadata.clientAppVersion != null ? metadata.clientAppVersion : null;
+
+          // Set requestOptions.customRequestProperties based on the metadata
+          // for the document
+          requestOptions.customRequestProperties = metadata.customRequestProperties != null ?
+            metadata.customRequestProperties : null;
+
           return Kinvey.Persistence.Net.update({
             namespace: USERS === collection ? USERS : DATA_STORE,
             collection: USERS === collection ? null : collection,
             id: document._id,
             data: document,
             auth: Auth.Default
-          }, options).then(null, function() {
+          }, requestOptions).then(null, function() {
             // Rejection should not break the entire synchronization. Instead,
             // append the document id to `error`, and resolve.
             error.push(document._id);
