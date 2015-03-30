@@ -106,7 +106,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.2.0';
+    Kinvey.SDK_VERSION = '1.2.1';
 
     // Properties.
     // -----------
@@ -1658,7 +1658,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.2.0'];
+      var parts = ['js-nodejs/1.2.1'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -7895,7 +7895,7 @@
             var responseData = Buffer.concat(data);
 
             // Check `Content-Type` header for application/json
-            if(responseData != null && !(responseData instanceof Blob)) {
+            if(!options.file && responseData != null && 204 !== response.statusCode) {
               var responseContentType = response.getHeader('Content-Type');
               var error;
 
