@@ -115,7 +115,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.3.4';
+    Kinvey.SDK_VERSION = '1.3.5';
 
     // Properties.
     // -----------
@@ -380,7 +380,7 @@
         // Initialize the synchronization namespace and restore the active user.
         return Kinvey.Sync.init(options.sync);
       }).then(function() {
-        log('Kinvey initialized, running version: js-nodejs/1.3.4');
+        log('Kinvey initialized, running version: js-nodejs/1.3.5');
         return restoreActiveUser(options);
       });
 
@@ -1758,7 +1758,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.3.4'];
+      var parts = ['js-nodejs/1.3.5'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -3851,9 +3851,8 @@
         options = options || {};
 
         // Validate arguments.
-        if(null == usernameOrData.username && null == usernameOrData.password &&
-          null == usernameOrData._socialIdentity) {
-          error = new Kinvey.Error('Argument must contain: username and password, or _socialIdentity.');
+        if((null == usernameOrData.username || null == usernameOrData.password) && null == usernameOrData._socialIdentity) {
+          error = new Kinvey.Error('Username and/or password missing. Please provide both a username and password to login.');
           return wrapCallbacks(Kinvey.Defer.reject(error), options);
         }
 
@@ -3922,10 +3921,6 @@
        * Logs out the active user.
        *
        * @param {Options} [options] Options.
-       * @param {boolean} [options.force=false] Reset the active user even if an
-       *          `InvalidCredentials` error is returned.
-       * @param {boolean} [options.silent=false] Succeed when there is no active
-       *          user.
        * @returns {Promise} The previous active user.
        */
       logout: function(options) {
@@ -3934,7 +3929,7 @@
 
         // If `options.silent`, resolve immediately if there is no active user.
         var promise;
-        if(options.silent && null === Kinvey.getActiveUser()) {
+        if(null === Kinvey.getActiveUser()) {
           promise = Kinvey.Defer.resolve(null);
         }
         else { // Otherwise, attempt to logout the active user.
@@ -3949,9 +3944,8 @@
             collection: '_logout',
             auth: Auth.Session
           }, options).then(null, function(error) {
-            // If `options.force`, clear the active user on `INVALID_CREDENTIALS`.
-            if(options.force && (Kinvey.Error.INVALID_CREDENTIALS === error.name ||
-                Kinvey.Error.EMAIL_VERIFICATION_REQUIRED === error.name)) {
+            // Clear the active user on `INVALID_CREDENTIALS`.
+            if(Kinvey.Error.INVALID_CREDENTIALS === error.name || Kinvey.Error.EMAIL_VERIFICATION_REQUIRED === error.name) {
               // Debug.
               if(KINVEY_DEBUG) {
                 log('The user credentials are invalid. Returning success because of the force flag.');
@@ -5009,10 +5003,12 @@
             tiWebView.removeEventListener('error', loadHandler);
             popup.removeEventListener('close', closeHandler);
 
-            if(OS_IOS) {
+            // If on an iPhone, iPod, or iPad device
+            if(Titanium.Platform.name === 'iPhone OS') {
               tiCloseButton.removeEventListener('click', clickHandler);
             }
-            else if(OS_ANDROID) {
+            // If on an Android device
+            else if(Titanium.Platform.name === 'Android') {
               popup.close();
               popup.removeEventListener('androidback', closeHandler);
             }
@@ -5059,7 +5055,7 @@
           // Add the web view to the popup window
           popup.add(tiWebView);
 
-          if(OS_IOS) {
+          if(Titanium.Platform.name === 'iPhone OS') {
             // Create a window
             var win = Titanium.UI.createWindow({
               backgroundColor: 'white',
@@ -5087,7 +5083,7 @@
               modal: true
             });
           }
-          else if(OS_ANDROID) {
+          else if(Titanium.Platform.name === 'Android') {
             popup.addEventListener('androidback', closeHandler);
           }
 
@@ -7287,6 +7283,16 @@
       update: methodNotImplemented('Database.update'),
 
       /**
+       * Checks if an id was created offline as a temporary ID.
+       *
+       * @abstract
+       * @method
+       * @param {String} id The id.
+       * @returns {Boolean} True or false if the id is a temporary ID.
+       */
+      isTemporaryObjectID: methodNotImplemented('Database.isTemporaryObjectID'),
+
+      /**
        * Sets the implementation of `Database` to the specified adapter.
        *
        * @method
@@ -7294,7 +7300,7 @@
        */
       use: use([
         'batch', 'clean', 'count', 'destroy', 'destruct', 'find', 'findAndModify',
-        'get', 'group', 'save', 'update'
+        'get', 'group', 'save', 'update', 'isTemporaryObjectID'
       ])
     };
 
@@ -7878,15 +7884,16 @@
               request.collection != null &&
               request.namespace === 'appdata') {
               var expectSingleEntity = request.id != null ? true : false;
+              var rawResponse = options.trace && isObject(response) ? response.result : response;
               var error;
 
-              if(isArray(response) && expectSingleEntity) {
+              if(isArray(rawResponse) && expectSingleEntity) {
                 error = new Kinvey.Error('Expected a single entity as a response to ' +
                   request.method + ' ' + url + '. Received an array ' +
                   'of entities instead.');
                 throw error;
               }
-              else if(!isArray(response) && !expectSingleEntity) {
+              else if(!isArray(rawResponse) && !expectSingleEntity) {
                 error = new Kinvey.Error('Expected an array of entities as a response to ' +
                   request.method + ' ' + url + '. Received a single ' +
                   'entity instead.');
@@ -8254,7 +8261,7 @@
 
           // Step 4: update the metadata.
           return Database.findAndModify(Sync.system, collection, function(metadata) {
-            // Remove each document from the metadata.
+            // Remove each document from the metadata that was synced
             result.success.forEach(function(id) {
               if(metadata.documents.hasOwnProperty(id)) {
                 metadata.size -= 1;
@@ -8262,11 +8269,23 @@
               }
             });
 
+            // Remove id's that were created offline, synced with the Kinvey Cloud and
+            // didn't result in an error
+            try {
+              var ids = Object.keys(metadata.documents);
+              ids.forEach(function(id) {
+                if(metadata.documents.hasOwnProperty(id) && result.error.indexOf(id) === -1) {
+                  metadata.size -= 1;
+                  delete metadata.documents[id];
+                }
+              });
+            }
+            catch(err) {}
+
             // Return the new metadata.
             return metadata;
           }, options);
         }).then(function() {
-          //console.log(result);
           // Step 5: return the synchronization result.
           return result;
         });
@@ -8501,6 +8520,7 @@
           var document = composite.document;
           var metadata = composite.metadata;
           var requestOptions = options || {};
+          var originalId = document._id;
 
           // Set requestOptions.appVersion based on the metadata for the document
           requestOptions.clientAppVersion = metadata.clientAppVersion != null ? metadata.clientAppVersion : null;
@@ -8510,6 +8530,32 @@
           requestOptions.customRequestProperties = metadata.customRequestProperties != null ?
             metadata.customRequestProperties : null;
 
+          // Send a create request if the document was created offline
+          if(Database.isTemporaryObjectID(originalId)) {
+            // Delete the id
+            delete document._id;
+
+            // Send the request
+            return Kinvey.Persistence.Net.create({
+              namespace: USERS === collection ? USERS : DATA_STORE,
+              collection: USERS === collection ? null : collection,
+              data: document,
+              auth: Auth.Default
+            }, requestOptions).then(function(createdDoc) {
+              // Remove the doc created offline
+              return Database.destroy(collection, originalId).then(function() {
+                return createdDoc;
+              });
+            }, function() {
+              document._id = originalId;
+              // Rejection should not break the entire synchronization. Instead,
+              // append the document id to `error`, and resolve.
+              error.push(document._id);
+              return null;
+            });
+          }
+
+          // Send and update request
           return Kinvey.Persistence.Net.update({
             namespace: USERS === collection ? USERS : DATA_STORE,
             collection: USERS === collection ? null : collection,
