@@ -100,6 +100,14 @@
     Kinvey.MICHostName = 'https://auth.kinvey.com';
 
     /**
+     * The MIC API version.
+     *
+     * @type {Number}
+     * @default undefined
+     */
+    Kinvey.MICAPIVersion = undefined;
+
+    /**
      * The Kinvey API version used when communicating with `Kinvey.APIHostName`.
      *
      * @constant
@@ -115,7 +123,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.4.0';
+    Kinvey.SDK_VERSION = '1.4.1';
 
     // Properties.
     // -----------
@@ -298,17 +306,18 @@
      * Initializes the library for use with Kinvey services.
      *
      * @param {Options}  options Options.
-     * @param {string}  [options.clientAppVersion]   Client App Version.
+     * @param {string}  [options.clientAppVersion]        Client App Version.
      * @param {Object}  [options.customRequestProperties] Customer request properties.
-     * @param {string}  [options.apiHostName]  API Host Name. Must use the `https` protocol
-     * @param {string}  [options.micHostName]  MIC Host Name. Must use the `https` protocol
-     * @param {string}   options.appKey        App Key.
-     * @param {string}  [options.appSecret]    App Secret.
-     * @param {string}  [options.masterSecret] Master Secret. **Never use the
-     *          Master Secret in client-side code.**
-     * @param {boolean} [options.refresh=true] Refresh the active user (if any).
-     * @param {Object}  [options.sync]         Synchronization options.
-     * @returns {Promise} The active user.
+     * @param {string}  [options.apiHostName]             API Host Name. Must use the `https` protocol
+     * @param {string}  [options.micHostName]             MIC Host Name. Must use the `https` protocol
+     * @param {number}  [options.micApiVersion=1]         MIC version to use.
+     * @param {string}   options.appKey                   App Key.
+     * @param {string}  [options.appSecret]               App Secret.
+     * @param {string}  [options.masterSecret]            Master Secret. **Never use the
+     *                                                    Master Secret in client-side code.**
+     * @param {boolean} [options.refresh=true]            Refresh the active user (if any).
+     * @param {Object}  [options.sync]                    Synchronization options.
+     * @returns {Promise}                                 The active user.
      */
     Kinvey.init = function(options) {
       var error;
@@ -357,6 +366,9 @@
         return wrapCallbacks(Kinvey.Defer.reject(error), options);
       }
 
+      // Set the MIC version
+      Kinvey.MICAPIVersion = options.micApiVersion || Kinvey.MICAPIVersion;
+
       // Set the Client App Version
       if(options.clientAppVersion != null) {
         Kinvey.ClientAppVersion.setVersion(options.clientAppVersion);
@@ -380,7 +392,7 @@
         // Initialize the synchronization namespace and restore the active user.
         return Kinvey.Sync.init(options.sync);
       }).then(function() {
-        log('Kinvey initialized, running version: js-nodejs/1.4.0');
+        log('Kinvey initialized, running version: js-nodejs/1.4.1');
         return restoreActiveUser(options);
       });
 
@@ -1758,7 +1770,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.4.0'];
+      var parts = ['js-nodejs/1.4.1'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -4745,6 +4757,7 @@
        * @param  {string}   authorizationGrant        Authorization Grant.
        * @param  {string}   redirectUri               Redirect Uri.
        * @param  {Object}   [options]                 Options.
+       * @params {string}   [options.micApiVersion]   MIC API version to use.
        * @params {string}   [options.username]        Username for the user to be authorized.
        * @params {string}   [options.password]        Password for the user to be authorized.
        * @param  {boolean}  [options.create=true]     Create a new user if no user exists.
@@ -4897,10 +4910,20 @@
        * @return {Promise}             Temp Login Uri.
        */
       requestUrl: function(clientId, redirectUri, options) {
+        var url = Kinvey.MICHostName;
+        options.micApiVersion = options.micApiVersion || Kinvey.MICAPIVersion;
+
+        // Set the MIC API version
+        if(options.micApiVersion != null) {
+          var version = options.micApiVersion + '';
+          version = version.indexOf('v') === 0 ? version : 'v' + version;
+          url = url + '/' + version;
+        }
+
         // Create a request
         var request = {
           method: 'POST',
-          url: Kinvey.MICHostName + MIC.AUTH_PATH,
+          url: url + MIC.AUTH_PATH,
           data: {
             client_id: clientId,
             redirect_uri: redirectUri,
@@ -4948,7 +4971,17 @@
       requestCodeWithPopup: function(clientId, redirectUri, options) {
         var error;
         var deferred = Kinvey.Defer.deferred();
-        var url = Kinvey.MICHostName + MIC.AUTH_PATH + '?client_id=' + encodeURIComponent(clientId) +
+        var url = Kinvey.MICHostName;
+        options.micApiVersion = options.micApiVersion || Kinvey.MICAPIVersion;
+
+        // Set the MIC API version
+        if(options.micApiVersion != null) {
+          var version = options.micApiVersion + '';
+          version = version.indexOf('v') === 0 ? version : 'v' + version;
+          url = url + '/' + version;
+        }
+
+        url = url + MIC.AUTH_PATH + '?client_id=' + encodeURIComponent(clientId) +
           '&redirect_uri=' + encodeURIComponent(redirectUri) + '&response_type=code';
         var deferredResolved = false;
         var popup;
@@ -5479,6 +5512,7 @@
        * @param  {String}   redirectUri               Where to redirect to after a succesful login. This should be the same value as setup
        *                                              in the Kinvey Console for your applicaiton.
        * @param  {Object}   [options]                 Options.
+       * @param  {String}   [options.micApiVersion]   MIC API version to use.
        * @param  {Boolean}  [options.create=true]     Create a new user if no user exists.
        * @param  {Number}   [options.timeout=300000]  How long to wait for a successful authorization. Defaults to 5 minutes.
        * @return {Promise}                            Authorized user.
@@ -5495,6 +5529,7 @@
        * @param  {String}   redirectUri             Where to redirect to after a succesful login. This should be the same value as setup
        *                                            in the Kinvey Console for your applicaiton.
        * @param  {Object}   [options]               Options.
+       * @param  {String}   [options.micApiVersion] MIC API version to use.
        * @param  {Boolean}  [options.create=true]   Create a new user if no user exists.
        * @return {Promise}                          Authorized user.
        */
