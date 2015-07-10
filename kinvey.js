@@ -123,7 +123,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.4.1';
+    Kinvey.SDK_VERSION = '1.4.2';
 
     // Properties.
     // -----------
@@ -310,7 +310,7 @@
      * @param {Object}  [options.customRequestProperties] Customer request properties.
      * @param {string}  [options.apiHostName]             API Host Name. Must use the `https` protocol
      * @param {string}  [options.micHostName]             MIC Host Name. Must use the `https` protocol
-     * @param {number}  [options.micApiVersion=1]         MIC version to use.
+     * @param {number}  [options.micApiVersion]         MIC version to use.
      * @param {string}   options.appKey                   App Key.
      * @param {string}  [options.appSecret]               App Secret.
      * @param {string}  [options.masterSecret]            Master Secret. **Never use the
@@ -392,7 +392,7 @@
         // Initialize the synchronization namespace and restore the active user.
         return Kinvey.Sync.init(options.sync);
       }).then(function() {
-        log('Kinvey initialized, running version: js-nodejs/1.4.1');
+        log('Kinvey initialized, running version: js-nodejs/1.4.2');
         return restoreActiveUser(options);
       });
 
@@ -1770,7 +1770,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.4.1'];
+      var parts = ['js-nodejs/1.4.2'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -8791,7 +8791,7 @@
         options = options || {};
 
         // Save applicable options.
-        Sync.enabled = null != options ? options.enable : false;
+        Sync.enabled = 'undefined' !== typeof options.enable ? options.enable : Sync.enabled;
         Sync.online = 'undefined' !== typeof options.online ? options.online : Sync.online;
 
         // Resolve immediately.
