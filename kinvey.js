@@ -123,7 +123,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.4.3';
+    Kinvey.SDK_VERSION = '1.4.4';
 
     // Properties.
     // -----------
@@ -392,7 +392,7 @@
         // Initialize the synchronization namespace and restore the active user.
         return Kinvey.Sync.init(options.sync);
       }).then(function() {
-        log('Kinvey initialized, running version: js-nodejs/1.4.3');
+        log('Kinvey initialized, running version: js-nodejs/1.4.4');
         return restoreActiveUser(options);
       });
 
@@ -1770,7 +1770,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.4.3'];
+      var parts = ['js-nodejs/1.4.4'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
