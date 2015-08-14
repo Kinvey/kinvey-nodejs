@@ -1,0 +1,73 @@
+0 info it worked if it ends with ok
+1 verbose cli [ '/Users/Thomas/.nvm/v0.10.40/bin/node',
+1 verbose cli   '/Users/Thomas/.nvm/v0.10.40/bin/npm',
+1 verbose cli   'publish' ]
+2 info using npm@1.4.28
+3 info using node@v0.10.40
+4 verbose publish [ '.' ]
+5 verbose cache add [ '.', null ]
+6 verbose cache add name=undefined spec="." args=[".",null]
+7 verbose parsed url { protocol: null,
+7 verbose parsed url   slashes: null,
+7 verbose parsed url   auth: null,
+7 verbose parsed url   host: null,
+7 verbose parsed url   port: null,
+7 verbose parsed url   hostname: null,
+7 verbose parsed url   hash: null,
+7 verbose parsed url   search: null,
+7 verbose parsed url   query: null,
+7 verbose parsed url   pathname: '.',
+7 verbose parsed url   path: '.',
+7 verbose parsed url   href: '.' }
+8 silly lockFile 3a52ce78- .
+9 verbose lock . /Users/Thomas/.npm/3a52ce78-.lock
+10 verbose tar pack [ '/Users/Thomas/.npm/kinvey/1.4.5/package.tgz', '.' ]
+11 verbose tarball /Users/Thomas/.npm/kinvey/1.4.5/package.tgz
+12 verbose folder .
+13 info prepublish kinvey@1.4.5
+14 silly lockFile 1f1177db-tar tar://.
+15 verbose lock tar://. /Users/Thomas/.npm/1f1177db-tar.lock
+16 silly lockFile 4089db65-mas-npm-kinvey-1-4-5-package-tgz tar:///Users/Thomas/.npm/kinvey/1.4.5/package.tgz
+17 verbose lock tar:///Users/Thomas/.npm/kinvey/1.4.5/package.tgz /Users/Thomas/.npm/4089db65-mas-npm-kinvey-1-4-5-package-tgz.lock
+18 silly lockFile 1f1177db-tar tar://.
+19 silly lockFile 1f1177db-tar tar://.
+20 silly lockFile 4089db65-mas-npm-kinvey-1-4-5-package-tgz tar:///Users/Thomas/.npm/kinvey/1.4.5/package.tgz
+21 silly lockFile 4089db65-mas-npm-kinvey-1-4-5-package-tgz tar:///Users/Thomas/.npm/kinvey/1.4.5/package.tgz
+22 silly lockFile 8438a8df--Thomas-npm-kinvey-1-4-5-package /Users/Thomas/.npm/kinvey/1.4.5/package
+23 verbose lock /Users/Thomas/.npm/kinvey/1.4.5/package /Users/Thomas/.npm/8438a8df--Thomas-npm-kinvey-1-4-5-package.lock
+24 silly lockFile 8438a8df--Thomas-npm-kinvey-1-4-5-package /Users/Thomas/.npm/kinvey/1.4.5/package
+25 silly lockFile 8438a8df--Thomas-npm-kinvey-1-4-5-package /Users/Thomas/.npm/kinvey/1.4.5/package
+26 silly lockFile 3a52ce78- .
+27 silly lockFile 3a52ce78- .
+28 silly publish { name: 'kinvey',
+28 silly publish   version: '1.4.5',
+28 silly publish   description: 'Kinvey JavaScript Library for Node.js.',
+28 silly publish   homepage: 'http://www.kinvey.com',
+28 silly publish   bugs: { email: 'support@kinvey.com' },
+28 silly publish   licenses:
+28 silly publish    [ { type: 'Apache-2.0',
+28 silly publish        url: 'http://www.apache.org/licenses/LICENSE-2.0' } ],
+28 silly publish   author: { name: 'Kinvey, Inc.' },
+28 silly publish   main: './kinvey.js',
+28 silly publish   repository:
+28 silly publish    { type: 'git',
+28 silly publish      url: 'https://github.com/Kinvey/kinvey-nodejs.git' },
+28 silly publish   dependencies: { promiscuous: '~0.6' },
+28 silly publish   devDependencies: {},
+28 silly publish   engines: { node: '>=0.10' },
+28 silly publish   readme: '# Kinvey\n[Kinvey](http://www.kinvey.com) (pronounced Kin-vey, like convey) makes it ridiculously easy for developers to setup, use and operate a cloud backend for their mobile apps. They don\'t have to worry about connecting to various cloud services, setting up servers for their backend, or maintaining and scaling them.\n\nThis node module makes it very easy to connect your Node.js app with Kinvey.\n\n## How to use\n\n### 1. Sign up for Kinvey\nTo use the library, sign up for Kinvey if you have not already done so. Go to the [sign up](https://console.kinvey.com/#signup) page, and follow the steps provided.\n\n### 2. Add the library\nYou can add the library in three ways. The recommended way to add the module to your project is adding a dependency to `package.json`:\n\n```javascript\n{\n  ...\n  "dependencies": {\n    "kinvey": "~1.4"\n    ...\n  }\n  ...\n}\n```\n\nThe module will be installed when updating your project:\n\n```bash\nnpm update\n```\n\nAlternatively, you can install the module directly from the command line:\n\n```bash\nnpm install kinvey\n```\n\nFinally, you can also clone the repository and create a symbolic link to the module:\n\n\tgit clone git@github.com:Kinvey/kinvey-nodejs.git\n\tcd kinvey-nodejs\n\tnpm link\n\n### 3. Configure the library\nNow, the library is available for use in your project. Import the library in your code using `require`. Next, use `Kinvey.init` to configure your app:\n\n```javascript\nvar Kinvey = require(\'kinvey\');\nKinvey.init({\n    appKey    : \'App Key\',\n    appSecret : \'App Secret\'\n});\n```\n\n### 4. Verify Set Up\nYou can use the following snippet to verify the app credentials were entered correctly. This function will contact the backend and verify that the library can communicate with your app.\n\n```javascript\nKinvey.ping({\n    success: function(response) {\n        console.log(\'Kinvey Ping Success. Kinvey Service is alive, version: \' + response.version + \', response: \' + response.kinvey);\n    },\n    error: function(error) {\n        console.log(\'Kinvey Ping Failed. Response: \' + error.description);\n    }\n});\n```\n\n## What’s next?\nYou are now ready to start building your awesome apps! Next we recommend diving into the [User guide](http://devcenter.kinvey.com/nodejs/guides/users) or [Data store guide](http://devcenter.kinvey.com/nodejs/guides/datastore) to learn more about our service, or explore the [sample apps](http://devcenter.kinvey.com/nodejs/samples) to go straight to working projects.\n\n## License\n\n    Copyright 2014 Kinvey, Inc.\n\n    Licensed under the Apache License, Version 2.0 (the "License");\n    you may not use this file except in compliance with the License.\n    You may obtain a copy of the License at\n\n       http://www.apache.org/licenses/LICENSE-2.0\n\n    Unless required by applicable law or agreed to in writing, software\n    distributed under the License is distributed on an "AS IS" BASIS,\n    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n    See the License for the specific language governing permissions and\n    limitations under the License.\n',
+28 silly publish   readmeFilename: 'README.md',
+28 silly publish   gitHead: 'bbeaa307c33636535338f6c02d1fea6d037a6ed3',
+28 silly publish   _id: 'kinvey@1.4.5',
+28 silly publish   scripts: {},
+28 silly publish   _shasum: '28b838ac757715132ee0a6865c445e690b9648b9',
+28 silly publish   _from: '.' }
+29 error need auth auth and email required for publishing
+29 error need auth You need to authorize this machine using `npm adduser`
+30 error System Darwin 14.4.0
+31 error command "/Users/Thomas/.nvm/v0.10.40/bin/node" "/Users/Thomas/.nvm/v0.10.40/bin/npm" "publish"
+32 error cwd /Users/Thomas/Development/Kinvey/SDKs/1.x/JavaScript/Releases/NodeJS
+33 error node -v v0.10.40
+34 error npm -v 1.4.28
+35 error code ENEEDAUTH
+36 verbose exit [ 1, true ]
