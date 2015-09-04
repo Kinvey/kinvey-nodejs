@@ -22,29 +22,6 @@
   // server.
   var root = this;
 
-  // Disable debug mode unless declared already.
-  if('undefined' === typeof KINVEY_DEBUG) {
-    /**
-     * Debug mode. This is a global variable, which can be set anywhere,
-     * anytime. Not available in the minified version of the library.
-     *
-     * @global
-     * @type {boolean}
-     * @default
-     */
-    KINVEY_DEBUG = false;
-  }
-
-  // Lightweight wrapper for `console.log` for easy debugging.
-  // http://paulirish.com/2009/log-a-lightweight-wrapper-for-consolelog/
-  var log = function() {
-    log.history = log.history || []; // Store logs to an array for reference.
-    log.history.push(arguments);
-    if(root.console) {
-      root.console.log.call(root.console, Array.prototype.slice.call(arguments));
-    }
-  };
-
   // Define a function which returns a fresh copy of the library. Copies are
   // fully isolated from each other, making it very easy to communicate with
   // different apps within the same JavaScript-context.
@@ -56,11 +33,6 @@
      * @exports Kinvey
      */
     var Kinvey = function(options) {
-      // Debug.
-      if(KINVEY_DEBUG) {
-        log('Obtaining a fresh copy of the library.', arguments);
-      }
-
       // Create a fresh copy of the library.
       var Kinvey = kinveyFn();
 
@@ -75,6 +47,50 @@
     };
 
     // From here, all library functionality will be appended to `Kinvey`.
+
+
+    // Define logger
+    var logger = require('loglevel');
+
+    // Prepend all log messages with 'Kinvey: '
+    var originalFactory = logger.methodFactory;
+    logger.methodFactory = function(methodName, logLevel) {
+      var rawMethod = originalFactory(methodName, logLevel);
+
+      return function(message, args) {
+        message = 'Kinvey: ' + message;
+        rawMethod(message, args);
+      };
+    };
+
+
+    Kinvey.Log = {
+      levels: logger.levels,
+
+      getLevel: function() {
+        return logger.getLevel();
+      },
+
+      setLevel: function(level, persist) {
+        logger.setLevel(level, persist);
+      },
+
+      setDefaultLevel: function(level) {
+        logger.setDefaultLevel(level);
+      },
+
+      enableAll: function(persist) {
+        logger.enableAll(persist);
+      },
+
+      disableAll: function(persist) {
+        logger.disableAll(persist);
+      }
+    };
+
+    // Set the default level to Kinvey.Log.levels.ERROR
+    Kinvey.Log.setDefaultLevel(Kinvey.Log.levels.ERROR);
+
 
     // Constants.
     // ----------
@@ -123,7 +139,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.4.5';
+    Kinvey.SDK_VERSION = '1.5.0';
 
     // Properties.
     // -----------
@@ -190,9 +206,7 @@
         }
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Restoring the active user.');
-        }
+        logger.debug('Restoring the active user.');
 
         // Set the active user to a near-empty user with only id and authtoken set.
         var previous = Kinvey.setActiveUser({
@@ -217,9 +231,7 @@
         // active user. If `INVALID_CREDENTIALS`, reset the active user.
         return Kinvey.User.me(options).then(function(response) {
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('Restored the active user.', response);
-          }
+          logger.debug('Restored the active user.', response);
 
           // Restore the options and return the response.
           options.success = fnSuccess;
@@ -227,9 +239,7 @@
           return response;
         }, function(error) {
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('Failed to restore the active user.', error);
-          }
+          logger.error('Failed to restore the active user.', error);
 
           // Reset the active user.
           if(Kinvey.Error.INVALID_CREDENTIALS === error.name) {
@@ -272,9 +282,7 @@
      */
     Kinvey.setActiveUser = function(user) {
       // Debug.
-      if(KINVEY_DEBUG) {
-        log('Setting the active user.', arguments);
-      }
+      logger.debug('Setting the active user.', arguments);
 
       // Validate arguments.
       if(null != user && !(null != user._id && null != user._kmd && null != user._kmd.authtoken)) {
@@ -323,9 +331,7 @@
       var error;
 
       // Debug.
-      if(KINVEY_DEBUG) {
-        log('Initializing the copy of the library.', arguments);
-      }
+      logger.debug('Initializing the copy of the library.', arguments);
 
       // Validate arguments.
       options = options || {};
@@ -392,7 +398,7 @@
         // Initialize the synchronization namespace and restore the active user.
         return Kinvey.Sync.init(options.sync);
       }).then(function() {
-        log('Kinvey initialized, running version: js-nodejs/1.4.5');
+        logger.debug('Kinvey initialized, running version: js-nodejs/1.5.0');
         return restoreActiveUser(options);
       });
 
@@ -407,9 +413,7 @@
      */
     Kinvey.ping = function(options) {
       // Debug.
-      if(KINVEY_DEBUG) {
-        log('Pinging the Kinvey service.', arguments);
-      }
+      logger.debug('Pinging the Kinvey service.', arguments);
 
       // Cast arguments.
       options = options || {};
@@ -425,13 +429,11 @@
       }, options);
 
       // Debug.
-      if(KINVEY_DEBUG) {
-        promise.then(function(response) {
-          log('Pinged the Kinvey service.', response);
-        }, function(error) {
-          log('Failed to ping the Kinvey service.', error);
-        });
-      }
+      promise.then(function(response) {
+        logger.debug('Pinged the Kinvey service.', response);
+      }, function(error) {
+        logger.error('Failed to ping the Kinvey service.', error);
+      });
 
       // Return the response.
       return wrapCallbacks(promise, options);
@@ -458,9 +460,7 @@
       this.stack = (new Error()).stack;
 
       // Debug.
-      if(KINVEY_DEBUG) {
-        log('A Kinvey.Error was thrown.', this.message, this.stack);
-      }
+      logger.error('A Kinvey.Error was thrown.', this.message, this.stack);
     };
     Kinvey.Error.prototype = new Error();
     Kinvey.Error.prototype.constructor = Kinvey.Error;
@@ -1196,9 +1196,7 @@
         var namespace = this;
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Applying an adapter.', namespace, adapter);
-        }
+        logger.debug('Applying an adapter.', namespace, adapter);
 
         // Validate adapter.
         adapter = adapter || {};
@@ -1562,11 +1560,9 @@
         });
 
         // Debug
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Authenticating through App Secret.', response);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Authenticating through App Secret.', response);
+        });
 
         // Return the response.
         return promise;
@@ -1616,11 +1612,9 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Authenticating through Master Secret.', response);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Authenticating through Master Secret.', response);
+        });
 
         // Return the response.
         return promise;
@@ -1665,11 +1659,9 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Authenticating through user credentials.', response);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Authenticating through user credentials.', response);
+        });
 
         // Return the response.
         return promise;
@@ -1770,7 +1762,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.4.5'];
+      var parts = ['js-nodejs/1.5.0'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -1857,9 +1849,7 @@
         Kinvey.ClientAppVersion.clear();
 
         // Debug
-        if(KINVEY_DEBUG) {
-          log('Setting the client app version.', arguments);
-        }
+        logger.debug('Setting the client app version.', arguments);
 
         clientAppVersion = parseAppVersion.apply(root, arguments);
       },
@@ -1869,9 +1859,7 @@
        */
       clear: function() {
         // Debug
-        if(KINVEY_DEBUG) {
-          log('Clearing the client app version.');
-        }
+        logger.debug('Clearing the client app version.');
 
         clearClientAppVersion();
       }
@@ -1962,9 +1950,7 @@
             var value = properties[name];
 
             // Debug
-            if(KINVEY_DEBUG) {
-              log('Adding custom request property ' + name + ' as ' + value + '.');
-            }
+            logger.debug('Adding custom request property ' + name + ' as ' + value + '.');
 
             customRequestProperties[name] = value;
           });
@@ -1976,9 +1962,7 @@
        */
       clear: function() {
         // Debug
-        if(KINVEY_DEBUG) {
-          log('Clearing the custom request properties.');
-        }
+        logger.debug('Clearing the custom request properties.');
 
         clearCustomRequestProperties();
       },
@@ -1990,9 +1974,7 @@
        */
       clearProperty: function(name) {
         // Debug
-        if(KINVEY_DEBUG) {
-          log('Clearing the custom request property ' + name + '.');
-        }
+        logger.debug('Clearing the custom request property ' + name + '.');
 
         clearCustomRequestProperty(name);
       }
@@ -2535,9 +2517,7 @@
      */
     Kinvey.execute = function(id, args, options) {
       // Debug.
-      if(KINVEY_DEBUG) {
-        log('Executing custom command.', arguments);
-      }
+      logger.debug('Executing custom command.', arguments);
 
       // Cast arguments.
       options = options || {};
@@ -2558,17 +2538,16 @@
       });
 
       // Debug.
-      if(KINVEY_DEBUG) {
-        promise.then(function(response) {
-          log('Executed the custom command.', response);
-        }, function(error) {
-          log('Failed to execute the custom command.', error);
-        });
-      }
+      promise.then(function(response) {
+        logger.debug('Executed the custom command.', response);
+      }, function(error) {
+        logger.error('Failed to execute the custom command.', error);
+      });
 
       // Return the response.
       return wrapCallbacks(promise, options);
     };
+
 
     // Data Store.
     // -----------
@@ -2592,9 +2571,7 @@
         var error;
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Retrieving documents by query.', arguments);
-        }
+        logger.debug('Retrieving documents by query.', arguments);
 
         // Validate arguments.
         if(null != query && !(query instanceof Kinvey.Query)) {
@@ -2618,13 +2595,11 @@
         }, options);
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Retrieved the documents by query.', response);
-          }, function(error) {
-            log('Failed to retrieve the documents by query.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Retrieved the documents by query.', response);
+        }, function(error) {
+          logger.error('Failed to retrieve the documents by query.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -2640,9 +2615,7 @@
        */
       get: function(collection, id, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Retrieving a document.', arguments);
-        }
+        logger.debug('Retrieving a document.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -2660,13 +2633,11 @@
         }, options);
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Retrieved the document.', response);
-          }, function(error) {
-            log('Failed to retrieve the document.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Retrieved the document.', response);
+        }, function(error) {
+          logger.error('Failed to retrieve the document.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -2682,9 +2653,7 @@
        */
       save: function(collection, document, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Saving a (new) document.', arguments);
-        }
+        logger.debug('Saving a (new) document.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -2692,9 +2661,7 @@
         // If the document has an `_id`, perform an update instead.
         if(null != document._id) {
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('The document has an _id, updating instead.', arguments);
-          }
+          logger.debug('The document has an _id, updating instead.', arguments);
 
           return Kinvey.DataStore.update(collection, document, options);
         }
@@ -2712,13 +2679,11 @@
         }, options);
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Saved the new document.', response);
-          }, function(error) {
-            log('Failed to save the new document.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Saved the new document.', response);
+        }, function(error) {
+          logger.error('Failed to save the new document.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -2737,9 +2702,7 @@
         var error;
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Updating a document.', arguments);
-        }
+        logger.debug('Updating a document.', arguments);
 
         // Validate arguments.
         if(null == document._id) {
@@ -2764,13 +2727,11 @@
         }, options);
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Updated the document.', response);
-          }, function(error) {
-            log('Failed to update the document.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Updated the document.', response);
+        }, function(error) {
+          logger.error('Failed to update the document.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -2789,9 +2750,7 @@
         var error;
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Deleting documents by query.', arguments);
-        }
+        logger.debug('Deleting documents by query.', arguments);
 
         // Cast and validate arguments.
         options = options || {};
@@ -2814,13 +2773,11 @@
         }, options);
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Deleted the documents.', response);
-          }, function(error) {
-            log('Failed to delete the documents.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Deleted the documents.', response);
+        }, function(error) {
+          logger.error('Failed to delete the documents.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -2838,9 +2795,7 @@
        */
       destroy: function(collection, id, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Deleting a document.', arguments);
-        }
+        logger.debug('Deleting a document.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -2859,10 +2814,7 @@
           // If `options.silent`, treat `ENTITY_NOT_FOUND` as success.
           if(options.silent && Kinvey.Error.ENTITY_NOT_FOUND === error.name) {
             // Debug.
-            if(KINVEY_DEBUG) {
-              log('The document does not exist. Returning success because of the silent flag.');
-            }
-
+            logger.debug('The document does not exist. Returning success because of the silent flag.');
             return {
               count: 0
             }; // The response.
@@ -2871,13 +2823,11 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Deleted the document.', response);
-          }, function(error) {
-            log('Failed to delete the document.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Deleted the document.', response);
+        }, function(error) {
+          logger.error('Failed to delete the document.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -2895,9 +2845,7 @@
         var error;
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Counting the number of documents.', arguments);
-        }
+        logger.debug('Counting the number of documents.', arguments);
 
         // Validate arguments.
         if(null != query && !(query instanceof Kinvey.Query)) {
@@ -2923,13 +2871,11 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Counted the number of documents.', response);
-          }, function(error) {
-            log('Failed to count the number of documents.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Counted the number of documents.', response);
+        }, function(error) {
+          logger.error('Failed to count the number of documents.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -2947,9 +2893,7 @@
         var error;
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Grouping documents', arguments);
-        }
+        logger.debug('Grouping documents', arguments);
 
         // Validate arguments.
         if(!(aggregation instanceof Kinvey.Group)) {
@@ -2976,13 +2920,11 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Grouped the documents.', response);
-          }, function(error) {
-            log('Failed to group the documents.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Grouped the documents.', response);
+        }, function(error) {
+          logger.error('Failed to group the documents.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -3013,9 +2955,7 @@
        */
       destroy: function(id, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Deleting a file.', arguments);
-        }
+        logger.debug('Deleting a file.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -3029,9 +2969,7 @@
           // If `options.silent`, treat `BLOB_NOT_FOUND` as success.
           if(options.silent && Kinvey.Error.BLOB_NOT_FOUND === error.name) {
             // Debug.
-            if(KINVEY_DEBUG) {
-              log('The file does not exist. Returning success because of the silent flag.');
-            }
+            logger.debug('The file does not exist. Returning success because of the silent flag.');
 
             // Return the response.
             return {
@@ -3042,13 +2980,11 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Deleted the file.', response);
-          }, function(error) {
-            log('Failed to delete the file.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Deleted the file.', response);
+        }, function(error) {
+          logger.error('Failed to delete the file.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -3068,9 +3004,7 @@
        */
       download: function(id, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Downloading a file.', arguments);
-        }
+        logger.debug('Downloading a file.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -3094,9 +3028,7 @@
           // If `options.stream`, return the file metadata instead of the resource.
           if(options.stream) {
             // Debug.
-            if(KINVEY_DEBUG) {
-              log('Returning the file metadata only because of the stream flag.');
-            }
+            logger.debug('Returning the file metadata only because of the stream flag.');
             return response;
           }
 
@@ -3122,13 +3054,11 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Downloaded the file.', response);
-          }, function(error) {
-            log('Failed to download the file.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Downloaded the file.', response);
+        }, function(error) {
+          logger.error('Failed to download the file.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -3144,9 +3074,7 @@
        */
       downloadByUrl: function(metadataOrUrl, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Downloading a file by URL.', arguments);
-        }
+        logger.debug('Downloading a file by URL.', arguments);
 
         // Cast arguments.
         var metadata = isObject(metadataOrUrl) ? metadataOrUrl : {
@@ -3174,13 +3102,11 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          download.then(function(response) {
-            log('Downloaded the file by URL.', response);
-          }, function(error) {
-            log('Failed to download a file by URL.', error);
-          });
-        }
+        download.then(function(response) {
+          logger.debug('Downloaded the file by URL.', response);
+        }, function(error) {
+          logger.error('Failed to download a file by URL.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(download, options);
@@ -3201,9 +3127,7 @@
         var error;
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Retrieving files by query.', arguments);
-        }
+        logger.debug('Retrieving files by query.', arguments);
 
         // Validate arguments.
         if(null != query && !(query instanceof Kinvey.Query)) {
@@ -3233,9 +3157,7 @@
           // If `options.download`, download the file resources.
           if(options.download) {
             // Debug.
-            if(KINVEY_DEBUG) {
-              log('Obtaining the file resources.', response);
-            }
+            logger.debug('Obtaining the file resources.', response);
 
             // Temporarily reset some options to avoid invoking the callbacks
             // multiple times.
@@ -3265,13 +3187,11 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Retrieved the files by query.', response);
-          }, function(error) {
-            log('Failed to retrieve the files by query.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Retrieved the files by query.', response);
+        }, function(error) {
+          logger.error('Failed to retrieve the files by query.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -3289,9 +3209,7 @@
        */
       stream: function(name, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Streaming a file.', arguments);
-        }
+        logger.debug('Streaming a file.', arguments);
 
         // Forward to `Kinvey.File.download`, with the `stream` flag set.
         options = options || {};
@@ -3312,9 +3230,7 @@
        */
       upload: function(file, data, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Uploading a file.', arguments);
-        }
+        logger.debug('Uploading a file.', arguments);
 
         // Cast arguments.
         file = file || {};
@@ -3374,13 +3290,11 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Uploaded the file.', response);
-          }, function(error) {
-            log('Failed to upload the file.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Uploaded the file.', response);
+        }, function(error) {
+          logger.error('Failed to upload the file.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -3585,9 +3499,7 @@
         var error;
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Linking a social identity to a Kinvey user.', arguments);
-        }
+        logger.debug('Linking a social identity to a Kinvey user.', arguments);
 
         // Cast and validate arguments.
         options = options || {};
@@ -3647,13 +3559,11 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Linked the social identity to the Kinvey user.', response);
-          }, function(error) {
-            log('Failed to link a social identity to a Kinvey user.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Linked the social identity to the Kinvey user.', response);
+        }, function(error) {
+          logger.error('Failed to link a social identity to a Kinvey user.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -3671,9 +3581,7 @@
         var error;
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Unlinking a social identity from a Kinvey user.', arguments);
-        }
+        logger.debug('Unlinking a social identity from a Kinvey user.', arguments);
 
         // Cast and validate arguments.
         if(!Kinvey.Social.isSupported(provider)) {
@@ -3703,9 +3611,7 @@
        */
       facebook: function(user, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Linking a Facebook identity to a Kinvey user.', arguments);
-        }
+        logger.debug('Linking a Facebook identity to a Kinvey user.', arguments);
 
         // Forward to `Kinvey.Social.connect`.
         return Kinvey.Social.connect(user, 'facebook', options);
@@ -3720,9 +3626,7 @@
        */
       google: function(user, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Linking a Google+ identity to a Kinvey user.', arguments);
-        }
+        logger.debug('Linking a Google+ identity to a Kinvey user.', arguments);
 
         // Forward to `Kinvey.Social.connect`.
         return Kinvey.Social.connect(user, 'google', options);
@@ -3747,9 +3651,7 @@
        */
       linkedIn: function(user, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Linking a LinkedIn identity to a Kinvey user.', arguments);
-        }
+        logger.debug('Linking a LinkedIn identity to a Kinvey user.', arguments);
 
         // Forward to `Kinvey.Social.connect`.
         return Kinvey.Social.connect(user, 'linkedIn', options);
@@ -3764,9 +3666,7 @@
        */
       twitter: function(user, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Linking a Twitter identity to a Kinvey user.', arguments);
-        }
+        logger.debug('Linking a Twitter identity to a Kinvey user.', arguments);
 
         // Forward to `Kinvey.Social.connect`.
         return Kinvey.Social.connect(user, 'twitter', options);
@@ -3796,9 +3696,7 @@
        */
       signup: function(data, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Signing up a new user.', arguments);
-        }
+        logger.debug('Signing up a new user.', arguments);
 
         // Forward to `Kinvey.User.create`. Signup, however, always marks the
         // created user as the active user.
@@ -3817,9 +3715,7 @@
        */
       signupWithProvider: function(provider, tokens, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Signing up a new user with a provider.', arguments);
-        }
+        logger.debug('Signing up a new user with a provider.', arguments);
 
         // Parse tokens.
         var data = {
@@ -3846,9 +3742,7 @@
         var error;
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Logging in an existing user.', arguments);
-        }
+        logger.debug('Logging in an existing user.', arguments);
 
         // Cast arguments.
         if(isObject(usernameOrData)) {
@@ -3893,13 +3787,11 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Logged in the user.', response);
-          }, function(error) {
-            log('Failed to login the user.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Logged in the user.', response);
+        }, function(error) {
+          logger.error('Failed to login the user.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -3915,9 +3807,7 @@
        */
       loginWithProvider: function(provider, tokens, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Logging in with a provider.', arguments);
-        }
+        logger.debug('Logging in with a provider.', arguments);
 
         // Parse tokens.
         var data = {
@@ -3946,9 +3836,7 @@
         }
         else { // Otherwise, attempt to logout the active user.
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('Logging out the active user.', arguments);
-          }
+          logger.debug('Logging out the active user.', arguments);
 
           // Prepare the response.
           promise = Kinvey.Persistence.create({
@@ -3959,9 +3847,7 @@
             // Clear the active user on `INVALID_CREDENTIALS`.
             if(Kinvey.Error.INVALID_CREDENTIALS === error.name || Kinvey.Error.EMAIL_VERIFICATION_REQUIRED === error.name) {
               // Debug.
-              if(KINVEY_DEBUG) {
-                log('The user credentials are invalid. Returning success because of the force flag.');
-              }
+              logger.error('The user credentials are invalid. Returning success because of the force flag.');
               return null;
             }
             return Kinvey.Defer.reject(error);
@@ -3990,13 +3876,11 @@
           });
 
           // Debug.
-          if(KINVEY_DEBUG) {
-            promise.then(function(response) {
-              log('Logged out the active user.', response);
-            }, function(error) {
-              log('Failed to logout the active user.', error);
-            });
-          }
+          promise.then(function(response) {
+            logger.debug('Logged out the active user.', response);
+          }, function(error) {
+            logger.error('Failed to logout the active user.', error);
+          });
         }
 
         // Return the response.
@@ -4011,9 +3895,7 @@
        */
       me: function(options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Retrieving information on the active user.', arguments);
-        }
+        logger.debug('Retrieving information on the active user.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -4042,13 +3924,11 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Retrieved information on the active user.', response);
-          }, function(error) {
-            log('Failed to retrieve information on the active user.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Retrieved information on the active user.', response);
+        }, function(error) {
+          logger.error('Failed to retrieve information on the active user.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -4063,9 +3943,7 @@
        */
       verifyEmail: function(username, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Requesting e-mail verification.', arguments);
-        }
+        logger.debug('Requesting e-mail verification.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -4079,13 +3957,11 @@
         }, options);
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Requested e-mail verification.', response);
-          }, function(error) {
-            log('Failed to request e-mail verification.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Requested e-mail verification.', response);
+        }, function(error) {
+          logger.error('Failed to request e-mail verification.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -4100,9 +3976,7 @@
        */
       forgotUsername: function(email, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Requesting a username reminder.', arguments);
-        }
+        logger.debug('Requesting a username reminder.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -4118,13 +3992,11 @@
         }, options);
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Requested a username reminder.', response);
-          }, function(error) {
-            log('Failed to request a username reminder.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Requested a username reminder.', response);
+        }, function(error) {
+          logger.error('Failed to request a username reminder.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -4139,9 +4011,7 @@
        */
       resetPassword: function(username, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Requesting a password reset.', arguments);
-        }
+        logger.debug('Requesting a password reset.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -4155,13 +4025,11 @@
         }, options);
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Requested a password reset.', response);
-          }, function(error) {
-            log('Failed to request a password reset.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Requested a password reset.', response);
+        }, function(error) {
+          logger.error('Failed to request a password reset.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -4176,9 +4044,7 @@
        */
       exists: function(username, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Checking whether a username exists.', arguments);
-        }
+        logger.debug('Checking whether a username exists.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -4196,13 +4062,11 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Checked whether the username exists.', response);
-          }, function(error) {
-            log('Failed to check whether the username exists.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Checked whether the username exists.', response);
+        }, function(error) {
+          logger.error('Failed to check whether the username exists.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -4219,9 +4083,7 @@
        */
       create: function(data, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Creating a new user.', arguments);
-        }
+        logger.debug('Creating a new user.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -4246,13 +4108,11 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Created the new user.', response);
-          }, function(error) {
-            log('Failed to create the new user.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Created the new user.', response);
+        }, function(error) {
+          logger.error('Failed to create the new user.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -4272,9 +4132,7 @@
         var error;
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Updating a user.', arguments);
-        }
+        logger.debug('Updating a user.', arguments);
 
         // Validate arguments.
         if(null == data._id) {
@@ -4344,10 +4202,7 @@
 
             if(activeUser._id === user._id) {
               // Debug.
-              if(KINVEY_DEBUG) {
-                log('Updating the active user because the updated user was the active user.');
-              }
-
+              logger.debug('Updating the active user because the updated user was the active user.');
               Kinvey.setActiveUser(user);
             }
           }
@@ -4356,13 +4211,11 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Updated the user.', response);
-          }, function(error) {
-            log('Failed to update the user.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Updated the user.', response);
+        }, function(error) {
+          logger.error('Failed to update the user.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -4381,9 +4234,7 @@
         var error;
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Retrieving users by query.', arguments);
-        }
+        logger.debug('Retrieving users by query.', arguments);
 
         // Validate arguments.
         if(null != query && !(query instanceof Kinvey.Query)) {
@@ -4400,9 +4251,7 @@
         var promise;
         if(options.discover) {
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('Using User Discovery because of the discover flag.');
-          }
+          logger.debug('Using User Discovery because of the discover flag.');
 
           // Prepare the response.
           promise = Kinvey.Persistence.create({
@@ -4430,13 +4279,11 @@
         }
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Retrieved the users by query.', response);
-          }, function(error) {
-            log('Failed to retrieve the users by query.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Retrieved the users by query.', response);
+        }, function(error) {
+          logger.error('Failed to retrieve the users by query.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -4451,9 +4298,7 @@
        */
       get: function(id, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Retrieving a user.', arguments);
-        }
+        logger.debug('Retrieving a user.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -4470,13 +4315,11 @@
         }, options);
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Retrieved the user.', response);
-          }, function(error) {
-            log('Failed to return the user.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Retrieved the user.', response);
+        }, function(error) {
+          logger.error('Failed to return the user.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -4496,9 +4339,7 @@
         var error;
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Deleting a user.', arguments);
-        }
+        logger.debug('Deleting a user.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -4527,10 +4368,7 @@
 
             if(activeUser._id === id) {
               // Debug.
-              if(KINVEY_DEBUG) {
-                log('Deleting the active user because the deleted user was the active user.');
-              }
-
+              logger.debug('Deleting the active user because the deleted user was the active user.');
               Kinvey.setActiveUser(null);
             }
           }
@@ -4540,23 +4378,18 @@
           // If `options.silent`, treat `USER_NOT_FOUND` as success.
           if(options.silent && Kinvey.Error.USER_NOT_FOUND === error.name) {
             // Debug.
-            if(KINVEY_DEBUG) {
-              log('The user does not exist. Returning success because of the silent flag.');
-            }
-
+            logger.debug('The user does not exist. Returning success because of the silent flag.');
             return null;
           }
           return Kinvey.Defer.reject(error);
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Deleted the user.', response);
-          }, function(error) {
-            log('Failed to delete the user.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Deleted the user.', response);
+        }, function(error) {
+          logger.error('Failed to delete the user.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -4571,9 +4404,7 @@
        */
       restore: function(id, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Restoring a previously disabled user.', arguments);
-        }
+        logger.debug('Restoring a previously disabled user.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -4587,13 +4418,11 @@
         }, options);
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Restored the previously disabled user.', response);
-          }, function(error) {
-            log('Failed to restore the previously disabled user.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Restored the previously disabled user.', response);
+        }, function(error) {
+          logger.error('Failed to restore the previously disabled user.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -4610,9 +4439,7 @@
         var error;
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Counting the number of users.', arguments);
-        }
+        logger.debug('Counting the number of users.', arguments);
 
         // Validate arguments.
         if(null != query && !(query instanceof Kinvey.Query)) {
@@ -4637,13 +4464,11 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Counted the number of users.', response);
-          }, function(error) {
-            log('Failed to count the number of users.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Counted the number of users.', response);
+        }, function(error) {
+          logger.error('Failed to count the number of users.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -4660,9 +4485,7 @@
         var error;
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Grouping users.', arguments);
-        }
+        logger.debug('Grouping users.', arguments);
 
         // Validate arguments.
         if(!(aggregation instanceof Kinvey.Group)) {
@@ -4688,13 +4511,11 @@
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Grouped the users.', response);
-          }, function(error) {
-            log('Failed to group the users.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Grouped the users.', response);
+        }, function(error) {
+          logger.error('Failed to group the users.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -4938,7 +4759,7 @@
         };
 
         // Debug.
-        if(KINVEY_DEBUG) {
+        if(Kinvey.Log.getLevel() === Kinvey.Log.levels.TRACE) {
           request.headers['X-Kinvey-Trace-Request'] = 'true';
           request.headers['X-Kinvey-Force-Debug-Log-Credentials'] = 'true';
         }
@@ -5282,7 +5103,7 @@
         };
 
         // Debug.
-        if(KINVEY_DEBUG) {
+        if(Kinvey.Log.getLevel() === Kinvey.Log.levels.TRACE) {
           request.headers['X-Kinvey-Trace-Request'] = 'true';
           request.headers['X-Kinvey-Force-Debug-Log-Credentials'] = 'true';
         }
@@ -5347,7 +5168,7 @@
         };
 
         // Debug.
-        if(KINVEY_DEBUG) {
+        if(Kinvey.Log.getLevel() === Kinvey.Log.levels.TRACE) {
           request.headers['X-Kinvey-Trace-Request'] = 'true';
           request.headers['X-Kinvey-Force-Debug-Log-Credentials'] = 'true';
         }
@@ -6389,9 +6210,7 @@
        */
       get: function(document, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Retrieving relations for a document.', document, options);
-        }
+        logger.debug('Retrieving relations for a document.', document, options);
 
         // If a list of documents was passed in, retrieve all relations in parallel.
         if(isArray(document)) {
@@ -6525,9 +6344,7 @@
         // All documents are retrieved.
         return promise.then(function() {
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('Retrieved relations for the document.', document);
-          }
+          logger.debug('Retrieved relations for the document.', document);
 
           // Restore the options and return the response.
           options.error = error;
@@ -6536,9 +6353,7 @@
           return document;
         }, function(reason) {
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('Failed to retrieve relations for the document.', document);
-          }
+          logger.error('Failed to retrieve relations for the document.', document);
 
           // Restore the options and return the error.
           options.error = error;
@@ -6561,9 +6376,7 @@
        */
       save: function(collection, document, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Saving a document with relations.', collection, document, options);
-        }
+        logger.debug('Saving a document with relations.', collection, document, options);
 
         // If a list of documents was passed in, retrieve all relations in parallel.
         if(isArray(document)) {
@@ -6685,9 +6498,7 @@
           });
 
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('Saved the document with relations.', response);
-          }
+          logger.debug('Saved the document with relations.', response);
 
           // Restore the options and return the response.
           delete relations['']; // Remove the added top-level document.
@@ -6697,9 +6508,7 @@
           return response;
         }, function(reason) {
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('Failed to save the document with relations.', error);
-          }
+          logger.error('Failed to save the document with relations.', error);
 
           // Restore the options and return the error.
           delete relations['']; // Remove the added top-level document.
@@ -6729,6 +6538,7 @@
       options.fallback = isEnabled && isOnline && false !== options.fallback;
       options.offline = isEnabled && (!isOnline || options.offline);
       options.refresh = isEnabled && isOnline && false !== options.refresh;
+      options.handler = typeof options.handler === 'function' ? options.handler : function() {};
       return options;
     };
 
@@ -6853,18 +6663,14 @@
         // If `options.offline`, use local.
         if(request.local.req && options.offline) {
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('Using local persistence.');
-          }
+          logger.debug('Using local persistence.');
 
           return Kinvey.Persistence.Local.create(request, options).then(null, function(error) {
             // On rejection, if `options.fallback`, perform aggregation requests
             // against net.
             if(options.fallback && '_group' === request.id) {
               // Debug.
-              if(KINVEY_DEBUG) {
-                log('Local persistence failed. Use net persistence because of the fallback flag.');
-              }
+              logger.debug('Local persistence failed. Use net persistence because of the fallback flag.');
 
               options.offline = false; // Overwrite to avoid infinite recursion.
               return Kinvey.Persistence.create(request, options);
@@ -6874,17 +6680,13 @@
         }
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Using net persistence.');
-        }
+        logger.debug('Using net persistence.');
 
         // Use net. If `options.refresh`, persist the response locally.
         var promise = Kinvey.Persistence.Net.create(request, options);
         if(request.local.res && options.refresh) {
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('Persisting the response locally.');
-          }
+          logger.debug('Persisting the response locally.');
 
           return promise.then(function(response) {
             // The request `data` is the response from the network.
@@ -6913,18 +6715,14 @@
         // If `options.offline`, use local.
         if(request.local.req && options.offline) {
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('Using local persistence.');
-          }
+          logger.debug('Using local persistence.');
 
           return Kinvey.Persistence.Local.read(request, options).then(null, function(error) {
             // On rejection, if `options.fallback`, perform the request against
             // net.
             if(options.fallback) {
               // Debug.
-              if(KINVEY_DEBUG) {
-                log('Local persistence failed. Use net persistence because of the fallback flag.');
-              }
+              logger.debug('Local persistence failed. Use net persistence because of the fallback flag.');
 
               options.offline = false; // Overwrite to avoid infinite recursion.
               return Kinvey.Persistence.read(request, options);
@@ -6934,9 +6732,7 @@
         }
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Using net persistence.');
-        }
+        logger.debug('Using net persistence.');
 
         // Use net.
         var promise = Kinvey.Persistence.Net.read(request, options);
@@ -6946,9 +6742,7 @@
         if(request.local.res && options.refresh && !fieldSelection) {
           return promise.then(function(response) {
             // Debug.
-            if(KINVEY_DEBUG) {
-              log('Persisting the response locally.');
-            }
+            logger.debug('Persisting the response locally.');
 
             // Add support for references.
             var promise;
@@ -7008,25 +6802,19 @@
         // If `options.offline`, use local.
         if(request.local.req && options.offline) {
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('Using local persistence.');
-          }
+          logger.debug('Using local persistence.');
 
           return Kinvey.Persistence.Local.update(request, options);
         }
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Using net persistence..');
-        }
+        logger.debug('Using net persistence..');
 
         // Use net. If `options.refresh`, persist the response locally.
         var promise = Kinvey.Persistence.Net.update(request, options);
         if(request.local.res && options.refresh) {
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('Persisting the response locally.');
-          }
+          logger.debug('Persisting the response locally.');
 
           return promise.then(function(response) {
             // The request `data` is the response from the network.
@@ -7055,25 +6843,19 @@
         // If `options.offline`, use local.
         if(request.local.req && options.offline) {
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('Using local persistence.');
-          }
+          logger.debug('Using local persistence.');
 
           return Kinvey.Persistence.Local.destroy(request, options);
         }
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Using net persistence.');
-        }
+        logger.debug('Using net persistence.');
 
         // Use net. If `options.refresh`, persist the response locally.
         var promise = Kinvey.Persistence.Net.destroy(request, options);
         if(request.local.res && options.refresh) {
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('Persisting the response locally.');
-          }
+          logger.debug('Persisting the response locally.');
 
           return promise.then(function(response) {
             // Initiate the same request against local.
@@ -7362,9 +7144,7 @@
        */
       create: function(request, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Initiating a create request.', arguments);
-        }
+        logger.debug('Initiating a create request.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -7389,9 +7169,7 @@
           // If `options.offline`, the request is subject to synchronization.
           if(options.offline && false !== options.track) {
             // Debug.
-            if(KINVEY_DEBUG) {
-              log('Notifying the synchronization functionality.', collection, response);
-            }
+            logger.debug('Notifying the synchronization functionality.', collection, response);
 
             return Sync.notify(collection, response, options).then(function() {
               // Return the original response.
@@ -7413,9 +7191,7 @@
         var error;
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Initiating a read request.', arguments);
-        }
+        logger.debug('Initiating a read request.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -7503,9 +7279,7 @@
        */
       update: function(request, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Initiating an update request.', arguments);
-        }
+        logger.debug('Initiating an update request.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -7523,9 +7297,7 @@
           // If `options.offline`, the response is subject to synchronization.
           if(options.offline && false !== options.track) {
             // Debug.
-            if(KINVEY_DEBUG) {
-              log('Notifying the synchronization functionality.', collection, response);
-            }
+            logger.debug('Notifying the synchronization functionality.', collection, response);
 
             return Sync.notify(collection, response, options).then(function() {
               // Return the original response.
@@ -7545,9 +7317,7 @@
        */
       destroy: function(request, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Initiating a delete request.', arguments);
-        }
+        logger.debug('Initiating a delete request.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -7568,9 +7338,7 @@
           // If `options.offline`, the request is subject to synchronization.
           if(options.offline && false !== options.track) {
             // Debug.
-            if(KINVEY_DEBUG) {
-              log('Notifying the synchronization functionality.', collection, response);
-            }
+            logger.debug('Notifying the synchronization functionality.', collection, response);
 
             return Sync.notify(collection, response.documents, options).then(function() {
               // Return the original response.
@@ -7606,9 +7374,7 @@
        */
       create: function(request, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Initiating a create request.', arguments);
-        }
+        logger.debug('Initiating a create request.', arguments);
 
         // Strip maxAge metadata.
         request.data = maxAge.removeMetadata(request.data);
@@ -7627,9 +7393,7 @@
        */
       read: function(request, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Initiating a read request.', arguments);
-        }
+        logger.debug('Initiating a read request.', arguments);
 
         // Cast arguments.
         request.flags = request.flags || {};
@@ -7678,9 +7442,7 @@
        */
       update: function(request, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Initiating an update request.', arguments);
-        }
+        logger.debug('Initiating an update request.', arguments);
 
         // Strip maxAge metadata.
         request.data = maxAge.removeMetadata(request.data);
@@ -7699,9 +7461,7 @@
        */
       destroy: function(request, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Initiating a delete request.', arguments);
-        }
+        logger.debug('Initiating a delete request.', arguments);
 
         // Initiate the network request.
         request.method = 'DELETE';
@@ -7745,7 +7505,7 @@
         }
 
         // Cast arguments.
-        options.trace = options.trace || (KINVEY_DEBUG && false !== options.trace);
+        options.trace = options.trace || (Kinvey.Log.getLevel() === Kinvey.Log.levels.TRACE && false !== options.trace);
         options.attemptMICRefresh = false === options.attemptMICRefresh ? false : true;
 
         // Build, escape, and join URL segments.
@@ -7870,7 +7630,7 @@
         }
 
         // Debug.
-        if(KINVEY_DEBUG) {
+        if(Kinvey.Log.getLevel() === Kinvey.Log.levels.TRACE) {
           headers['X-Kinvey-Trace-Request'] = 'true';
         }
 
@@ -7908,8 +7668,8 @@
             catch(e) {}
 
             // Debug.
-            if(KINVEY_DEBUG && options.trace && isObject(response)) {
-              log('Obtained the request ID.', response.headers['X-Kinvey-Request-Id']);
+            if(options.trace && isObject(response)) {
+              logger.debug('Obtained the request ID.', response.headers['X-Kinvey-Request-Id']);
             }
 
             // Check response to GET request that we receive a
@@ -7964,9 +7724,7 @@
                 response.requestId = requestId;
 
                 // Debug.
-                if(KINVEY_DEBUG) {
-                  log('Obtained the request ID.', requestId);
-                }
+                logger.debug('Obtained the request ID.', requestId);
               }
             }
             else { // Client-side error.
@@ -8269,7 +8027,10 @@
             ).then(null, function(response) {
               // Rejection occurs when a conflict could not be resolved. Append the
               // id to the errors, and resolve.
-              result.error.push(response.id);
+              result.error.push({
+                id: response.id,
+                error: response
+              });
               return null;
             });
           });
@@ -8449,10 +8210,13 @@
               success: [id],
               error: []
             };
-          }, function() {
+          }, function(err) {
             return {
               success: [],
-              error: [id]
+              error: [{
+                id: id,
+                error: err
+              }]
             };
           });
         });
@@ -8581,11 +8345,14 @@
               return Database.destroy(collection, originalId).then(function() {
                 return createdDoc;
               });
-            }, function() {
+            }, function(err) {
               document._id = originalId;
               // Rejection should not break the entire synchronization. Instead,
               // append the document id to `error`, and resolve.
-              error.push(document._id);
+              error.push({
+                id: document._id,
+                error: err
+              });
               return null;
             });
           }
@@ -8597,10 +8364,13 @@
             id: document._id,
             data: document,
             auth: Auth.Default
-          }, requestOptions).then(null, function() {
+          }, requestOptions).then(null, function(err) {
             // Rejection should not break the entire synchronization. Instead,
             // append the document id to `error`, and resolve.
-            error.push(document._id);
+            error.push({
+              id: document._id,
+              error: err
+            });
             return null;
           });
         });
@@ -8620,12 +8390,15 @@
             }),
             error: error
           };
-        }, function() {
+        }, function(err) {
           // Build the final response.
           return {
             success: [],
             error: documents.map(function(document) {
-              return document._id;
+              return {
+                id: document._id,
+                error: err
+              };
             })
           };
         });
@@ -8649,9 +8422,7 @@
        */
       count: function(collection, options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Counting the number of documents pending synchronization.', arguments);
-        }
+        logger.debug('Counting the number of documents pending synchronization.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -8660,13 +8431,11 @@
         var promise = Sync.count(collection, options);
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Counted the number of documents pending synchronization.', response);
-          }, function(error) {
-            log('Failed to count the number of documents pending synchronization.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Counted the number of documents pending synchronization.', response);
+        }, function(error) {
+          logger.error('Failed to count the number of documents pending synchronization.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -8681,9 +8450,7 @@
        */
       destruct: function(options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Deleting the local database.', arguments);
-        }
+        logger.debug('Deleting the local database.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -8692,13 +8459,11 @@
         var promise = Database.destruct(options);
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Deleted the local database.', response);
-          }, function(error) {
-            log('Failed to delete the local database.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Deleted the local database.', response);
+        }, function(error) {
+          logger.error('Failed to delete the local database.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -8715,9 +8480,7 @@
        */
       execute: function(options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Synchronizing the application.', arguments);
-        }
+        logger.debug('Synchronizing the application.', arguments);
 
         // Validate preconditions.
         if(!Kinvey.Sync.isOnline()) {
@@ -8734,9 +8497,7 @@
         var promise;
         if(null != options.user) {
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('Attempting to login with a user context.', options.user);
-          }
+          logger.debug('Attempting to login with a user context.', options.user);
 
           // Prepare the response.
           promise = Kinvey.User.login(options.user).then(function() {
@@ -8746,11 +8507,9 @@
           });
 
           // Debug.
-          if(KINVEY_DEBUG) {
-            promise.then(null, function(error) {
-              log('Failed to login with the user context.', error);
-            });
-          }
+          promise.then(null, function(error) {
+            logger.error('Failed to login with the user context.', error);
+          });
 
           // Return the response.
           delete options.success;
@@ -8761,13 +8520,11 @@
         promise = Sync.execute(options);
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          promise.then(function(response) {
-            log('Synchonized the application.', response);
-          }, function(error) {
-            log('Failed to synchronize the application.', error);
-          });
-        }
+        promise.then(function(response) {
+          logger.debug('Synchonized the application.', response);
+        }, function(error) {
+          logger.error('Failed to synchronize the application.', error);
+        });
 
         // Return the response.
         return wrapCallbacks(promise, options);
@@ -8783,9 +8540,7 @@
        */
       init: function(options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Initializing the synchronization functionality.', arguments);
-        }
+        logger.debug('Initializing the synchronization functionality.', arguments);
 
         // Cast arguments.
         options = options || {};
@@ -8823,9 +8578,7 @@
        */
       offline: function() {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Switching the application state to offline.');
-        }
+        logger.debug('Switching the application state to offline.');
 
         // Validate preconditions.
         if(!Kinvey.Sync.isEnabled()) {
@@ -8852,9 +8605,7 @@
        */
       online: function(options) {
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Switching the application state to online.', arguments);
-        }
+        logger.debug('Switching the application state to online.', arguments);
 
         // Validate preconditions.
         if(!Kinvey.Sync.isEnabled()) {
@@ -8991,9 +8742,7 @@
           // Listen for request completion.
           response.on('end', function() {
             // Debug.
-            if(KINVEY_DEBUG) {
-              log('The network request completed.', response);
-            }
+            logger.debug('The network request completed.', response);
 
             // Parse response.
             var responseData = Buffer.concat(data);
@@ -9087,27 +8836,42 @@
           });
         }
 
+        // Create a proxy request
+        var aborted = false;
+        var requestProxy = {
+          cancel: function() {
+            aborted = true;
+            request.abort();
+          }
+        };
+
         // Listen for request errors.
         request.on('error', function(msg) { // Client-side error.
           // Debug.
-          if(KINVEY_DEBUG) {
-            log('The network request failed.', msg);
+          logger.error('The network request failed.', msg);
+
+          if(timedOut) {
+            return deferred.reject('timeout');
+          }
+          else if(aborted) {
+            return deferred.reject('canceled');
           }
 
           // Reject the promise.
-          deferred.reject(timedOut ? 'timeout' : msg);
+          deferred.reject(msg);
         });
 
         // Debug.
-        if(KINVEY_DEBUG) {
-          log('Initiating a network request.', method, path, body, headers, options);
-        }
+        logger.debug('Initiating a network request.', method, path, body, headers, options);
 
         // Initiate request.
         if(null != body) {
           request.write(body);
         }
         request.end();
+
+        // Send the proxy request
+        options.handler(requestProxy);
 
         // Return the promise.
         return deferred.promise;
