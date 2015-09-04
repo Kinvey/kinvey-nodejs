@@ -1,6 +1,6 @@
 {
   "name"        : "kinvey",
-  "version"     : "1.4.6",
+  "version"     : "1.5.0",
   "description" : "Kinvey JavaScript Library for Node.js.",
   "homepage"    : "http://www.kinvey.com",
   "bugs"        : { "email": "support@kinvey.com" },
@@ -15,6 +15,7 @@
     "url"  : "https://github.com/Kinvey/kinvey-nodejs.git"
   },
   "dependencies": {
+    "loglevel": "pimterry/loglevel",
     "promiscuous": "~0.6"
   },
   "devDependencies" : {},
