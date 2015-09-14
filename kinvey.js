@@ -139,7 +139,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.5.0';
+    Kinvey.SDK_VERSION = '1.5.1';
 
     // Properties.
     // -----------
@@ -398,7 +398,7 @@
         // Initialize the synchronization namespace and restore the active user.
         return Kinvey.Sync.init(options.sync);
       }).then(function() {
-        logger.debug('Kinvey initialized, running version: js-nodejs/1.5.0');
+        logger.debug('Kinvey initialized, running version: js-nodejs/1.5.1');
         return restoreActiveUser(options);
       });
 
@@ -1762,7 +1762,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.5.0'];
+      var parts = ['js-nodejs/1.5.1'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -8871,7 +8871,9 @@
         request.end();
 
         // Send the proxy request
-        options.handler(requestProxy);
+        if(options.handler && typeof options.handler === 'function') {
+          options.handler(requestProxy);
+        }
 
         // Return the promise.
         return deferred.promise;
