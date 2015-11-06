@@ -139,7 +139,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.5.1';
+    Kinvey.SDK_VERSION = '1.6.0';
 
     // Properties.
     // -----------
@@ -398,7 +398,7 @@
         // Initialize the synchronization namespace and restore the active user.
         return Kinvey.Sync.init(options.sync);
       }).then(function() {
-        logger.debug('Kinvey initialized, running version: js-nodejs/1.5.1');
+        logger.debug('Kinvey initialized, running version: js-nodejs/1.6.0');
         return restoreActiveUser(options);
       });
 
@@ -437,6 +437,13 @@
 
       // Return the response.
       return wrapCallbacks(promise, options);
+    };
+
+    /**
+     * Flush the Database cache
+     */
+    Kinvey.flushDatabaseCache = function() {
+      return Database.flushCache();
     };
 
 
@@ -1762,7 +1769,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.5.1'];
+      var parts = ['js-nodejs/1.6.0'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -3140,7 +3147,7 @@
 
         // Build the flags.
         var flags = {};
-        if(false !== options.tls) {
+        if(options.tls !== false) {
           flags.tls = true;
         }
         if(options.ttl) {
@@ -6919,6 +6926,9 @@
        * @return {Promise} Upgrade has completed
        */
       upgrade: function() {
+        var logLevel = Kinvey.Log.getLevel();
+        Kinvey.Log.disableAll();
+
         try {
           // Read the existing version of the database
           return Database.find(Database.versionTable).then(null, function() {
@@ -6935,10 +6945,12 @@
             // Save the version doc
             return Database.save(Database.versionTable, doc);
           }).then(function() {
+            Kinvey.Log.setLevel(logLevel);
             return;
           });
         }
         catch(err) {
+          Kinvey.Log.setLevel(logLevel);
           // Catch unsupported database methods error and
           // just resolve
           return Kinvey.Defer.resolve();
@@ -7108,6 +7120,11 @@
        * @returns {Boolean} True or false if the id is a temporary ID.
        */
       isTemporaryObjectID: methodNotImplemented('Database.isTemporaryObjectID'),
+
+      /**
+       * Flush the cache
+       */
+      flushCache: methodNotImplemented('Database.flushCache'),
 
       /**
        * Sets the implementation of `Database` to the specified adapter.
@@ -7620,7 +7637,7 @@
           var customRequestPropertiesHeader = JSON.stringify(options.customRequestProperties);
           var customRequestPropertiesByteCount = getByteCount(customRequestPropertiesHeader);
           if(customRequestPropertiesByteCount >= CRP_MAX_BYTES) {
-            error = new Kinvey.Error('Custom request properties is ' + customRequestPropertiesByteCount +
+            error = new Kinvey.Error('Custom request properties are ' + customRequestPropertiesByteCount +
               ' bytes. It must be less then ' + CRP_MAX_BYTES + ' bytes.');
             return wrapCallbacks(Kinvey.Defer.reject(error), options);
           }
@@ -7838,6 +7855,18 @@
     // Most of these methods delegate back to `Sync`. Therefore, `Kinvey.Sync`
     // provides the public interface for synchronization.
 
+    // Configure Queue
+    root.Queue.configure(function(handler) {
+      var deferred = Kinvey.Defer.deferred();
+      try {
+        handler(deferred.resolve, deferred.reject, deferred.progress);
+      }
+      catch(err) {
+        deferred.reject(err);
+      }
+      return deferred.promise;
+    });
+
     /**
      * @private
      * @namespace Sync
@@ -7863,6 +7892,12 @@
        * @type {string}
        */
       system: 'system.sync',
+
+      /**
+       * Queue used to handle sync.
+       * @type {Queue}
+       */
+      queue: new root.Queue(1, Infinity),
 
       /**
        * Counts the number of documents pending synchronization. If `collection` is
@@ -7909,10 +7944,45 @@
         // Obtain all the collections that need to be synchronized.
         var query = new Kinvey.Query().greaterThan('size', 0);
         return Database.find(Sync.system, query, options).then(function(response) {
-          // Synchronize all the collections in parallel.
+          // Synchronize all the collections in parallel in batches to prevent exhausting
+          // network resources
           var promises = response.map(function(collection) {
-            return Sync._collection(collection._id, collection.documents, options);
+            var batchSize = 1000;
+            var i = 0;
+            var identifiers = Object.keys(collection.documents);
+            var syncResult = {
+              collection: collection,
+              success: [],
+              error: []
+            };
+
+            function batchSync() {
+              var batchIds = identifiers.slice(i, i + batchSize);
+              var batch = {};
+
+              i += batchSize;
+
+              for(var j = 0, len = batchIds.length; j < len; j++) {
+                var id = batchIds[j];
+                batch[id] = collection.documents[id];
+              }
+
+              return Sync._collection(collection._id, batch, options).then(function(result) {
+                syncResult.success = syncResult.success.concat(result.success);
+                syncResult.error = syncResult.error.concat(result.error);
+                return syncResult;
+              }).then(function(syncResult) {
+                if(i < identifiers.length) {
+                  return batchSync();
+                }
+
+                return syncResult;
+              });
+            }
+
+            return batchSync();
           });
+
           return Kinvey.Defer.all(promises);
         });
       },
@@ -8007,7 +8077,6 @@
         };
         var identifiers = Object.keys(documents);
 
-        // Read the documents
         return Sync._read(collection, documents, options).then(function(response) {
           // Step 2: categorize the documents in the collection.
           var promises = identifiers.map(function(id) {
@@ -8018,6 +8087,7 @@
               clientAppVersion: document.clientAppVersion,
               customRequestProperties: document.customRequestProperties
             };
+
             return Sync._document(
               collection,
               metadata, // The document metadata.
@@ -8034,6 +8104,7 @@
               return null;
             });
           });
+
           return Kinvey.Defer.all(promises);
         }).then(function(responses) {
           // Step 3: commit the documents in the collection.
@@ -8118,16 +8189,26 @@
             auth: Auth.Default
           };
 
-          // Read from local and net in parallel.
-          return Kinvey.Defer.all([
-            Kinvey.Persistence.Local.read(request, requestOptions),
-            Kinvey.Persistence.Net.read(request, requestOptions)
-          ]).then(function(responses) {
-            return {
-              local: responses[0],
-              net: responses[1]
-            };
-          });
+          if(Database.isTemporaryObjectID(id)) {
+            return Kinvey.Persistence.Local.read(request, requestOptions).then(function(response) {
+              return {
+                local: response,
+                net: []
+              };
+            });
+          }
+          else {
+            // Read from local and net in parallel.
+            return Kinvey.Defer.all([
+              Kinvey.Persistence.Local.read(request, requestOptions),
+              Kinvey.Persistence.Net.read(request, requestOptions)
+            ]).then(function(responses) {
+              return {
+                local: responses[0],
+                net: responses[1]
+              };
+            });
+          }
         });
 
         return Kinvey.Defer.all(promises).then(function(responses) {
@@ -8319,7 +8400,6 @@
           var document = composite.document;
           var metadata = composite.metadata;
           var requestOptions = options || {};
-          var originalId = document._id;
 
           // Set requestOptions.appVersion based on the metadata for the document
           requestOptions.clientAppVersion = metadata.clientAppVersion != null ? metadata.clientAppVersion : null;
@@ -8330,7 +8410,8 @@
             metadata.customRequestProperties : null;
 
           // Send a create request if the document was created offline
-          if(Database.isTemporaryObjectID(originalId)) {
+          if(Database.isTemporaryObjectID(document._id)) {
+            var originalId = document._id;
             // Delete the id
             delete document._id;
 
@@ -8374,6 +8455,7 @@
             return null;
           });
         });
+
         return Kinvey.Defer.all(promises).then(function(responses) {
           // `responses` is an `Array` of documents. Batch save all documents.
           return Kinvey.Persistence.Local.create({
