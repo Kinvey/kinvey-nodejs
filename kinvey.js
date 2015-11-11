@@ -64,6 +64,21 @@
     };
 
 
+    var Queue = require('promise-queue');
+
+    // Configure the Queue with a Kinvey.Defer
+    Queue.configure(function(handler) {
+      var deferred = Kinvey.Defer.deferred();
+      try {
+        handler(deferred.resolve, deferred.reject, deferred.progress);
+      }
+      catch(err) {
+        deferred.reject(err);
+      }
+      return deferred.promise;
+    });
+
+
     Kinvey.Log = {
       levels: logger.levels,
 
@@ -139,7 +154,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.6.0';
+    Kinvey.SDK_VERSION = '1.6.1';
 
     // Properties.
     // -----------
@@ -398,7 +413,7 @@
         // Initialize the synchronization namespace and restore the active user.
         return Kinvey.Sync.init(options.sync);
       }).then(function() {
-        logger.debug('Kinvey initialized, running version: js-nodejs/1.6.0');
+        logger.debug('Kinvey initialized, running version: js-nodejs/1.6.1');
         return restoreActiveUser(options);
       });
 
@@ -1769,7 +1784,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.6.0'];
+      var parts = ['js-nodejs/1.6.1'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -7855,18 +7870,6 @@
     // Most of these methods delegate back to `Sync`. Therefore, `Kinvey.Sync`
     // provides the public interface for synchronization.
 
-    // Configure Queue
-    root.Queue.configure(function(handler) {
-      var deferred = Kinvey.Defer.deferred();
-      try {
-        handler(deferred.resolve, deferred.reject, deferred.progress);
-      }
-      catch(err) {
-        deferred.reject(err);
-      }
-      return deferred.promise;
-    });
-
     /**
      * @private
      * @namespace Sync
@@ -7897,7 +7900,7 @@
        * Queue used to handle sync.
        * @type {Queue}
        */
-      queue: new root.Queue(1, Infinity),
+      queue: new Queue(1, Infinity),
 
       /**
        * Counts the number of documents pending synchronization. If `collection` is

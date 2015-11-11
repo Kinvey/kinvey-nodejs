@@ -70,7 +70,7 @@ You are now ready to start building your awesome apps! Next we recommend diving 
 
 ## License
 
-    Copyright 2014 Kinvey, Inc.
+    Copyright 2015 Kinvey, Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.

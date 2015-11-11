@@ -1,6 +1,6 @@
 {
   "name"        : "kinvey",
-  "version"     : "1.6.0",
+  "version"     : "1.6.1",
   "description" : "Kinvey JavaScript Library for Node.js.",
   "homepage"    : "http://www.kinvey.com",
   "bugs"        : { "email": "support@kinvey.com" },
@@ -16,7 +16,8 @@
   },
   "dependencies": {
     "loglevel": "~1.4.0",
-    "promiscuous": "~0.6"
+    "promiscuous": "~0.6",
+    "promise-queue": "git+https://github.com/ThomasConner/promise-queue.git"
   },
   "devDependencies" : {},
   "engines"         : { "node": ">=0.10" }
