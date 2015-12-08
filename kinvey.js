@@ -154,7 +154,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.6.1';
+    Kinvey.SDK_VERSION = '1.6.2';
 
     // Properties.
     // -----------
@@ -413,7 +413,7 @@
         // Initialize the synchronization namespace and restore the active user.
         return Kinvey.Sync.init(options.sync);
       }).then(function() {
-        logger.debug('Kinvey initialized, running version: js-nodejs/1.6.1');
+        logger.debug('Kinvey initialized, running version: js-nodejs/1.6.2');
         return restoreActiveUser(options);
       });
 
@@ -452,13 +452,6 @@
 
       // Return the response.
       return wrapCallbacks(promise, options);
-    };
-
-    /**
-     * Flush the Database cache
-     */
-    Kinvey.flushDatabaseCache = function() {
-      return Database.flushCache();
     };
 
 
@@ -1784,7 +1777,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.6.1'];
+      var parts = ['js-nodejs/1.6.2'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -7137,11 +7130,6 @@
       isTemporaryObjectID: methodNotImplemented('Database.isTemporaryObjectID'),
 
       /**
-       * Flush the cache
-       */
-      flushCache: methodNotImplemented('Database.flushCache'),
-
-      /**
        * Sets the implementation of `Database` to the specified adapter.
        *
        * @method
@@ -8184,16 +8172,13 @@
           requestOptions.customRequestProperties = metadata != null && metadata.customRequestProperties != null ?
             metadata.customRequestProperties : null;
 
-          // Build the request.
-          var request = {
-            namespace: USERS === collection ? USERS : DATA_STORE,
-            collection: USERS === collection ? null : collection,
-            query: new Kinvey.Query().contains('_id', [id]),
-            auth: Auth.Default
-          };
-
           if(Database.isTemporaryObjectID(id)) {
-            return Kinvey.Persistence.Local.read(request, requestOptions).then(function(response) {
+            return Kinvey.Persistence.Local.read({
+              namespace: USERS === collection ? USERS : DATA_STORE,
+              collection: USERS === collection ? null : collection,
+              id: id,
+              auth: Auth.Default
+            }, requestOptions).then(function(response) {
               return {
                 local: response,
                 net: []
@@ -8203,8 +8188,18 @@
           else {
             // Read from local and net in parallel.
             return Kinvey.Defer.all([
-              Kinvey.Persistence.Local.read(request, requestOptions),
-              Kinvey.Persistence.Net.read(request, requestOptions)
+              Kinvey.Persistence.Local.read({
+                namespace: USERS === collection ? USERS : DATA_STORE,
+                collection: USERS === collection ? null : collection,
+                id: id,
+                auth: Auth.Default
+              }, requestOptions),
+              Kinvey.Persistence.Net.read({
+                namespace: USERS === collection ? USERS : DATA_STORE,
+                collection: USERS === collection ? null : collection,
+                query: new Kinvey.Query().contains('_id', [id]),
+                auth: Auth.Default
+              }, requestOptions)
             ]).then(function(responses) {
               return {
                 local: responses[0],
@@ -8222,29 +8217,30 @@
           var error;
 
           responses.forEach(function(composite) {
-            var locals = composite.local;
-            var nets = composite.net;
+            var local = composite.local;
+            var net = composite.net.length === 1 ? composite.net[0] : null;
 
-            locals.forEach(function(document) {
-              // Check document for property _id. Thrown error will reject promise.
-              if(document._id == null) {
+            // Check document for property _id. Thrown error will reject promise.
+            if(local) {
+              if(local._id == null) {
                 error = new Kinvey.Error('Document does not have _id property defined. ' +
                   'It is required to do proper synchronization.');
                 throw error;
               }
 
-              response.local[document._id] = document;
-            });
-            nets.forEach(function(document) {
-              // Check document for property _id. Thrown error will reject promise.
-              if(document._id == null) {
+              response.local[local._id] = local;
+            }
+
+            // Check document for property _id. Thrown error will reject promise.
+            if(net) {
+              if(net._id == null) {
                 error = new Kinvey.Error('Document does not have _id property defined. ' +
                   'It is required to do proper synchronization.');
                 throw error;
               }
 
-              response.net[document._id] = document;
-            });
+              response.net[net._id] = net;
+            }
           });
 
           return response;
@@ -8548,6 +8544,33 @@
           logger.debug('Deleted the local database.', response);
         }, function(error) {
           logger.error('Failed to delete the local database.', error);
+        });
+
+        // Return the response.
+        return wrapCallbacks(promise, options);
+      },
+
+      /**
+       * Cleans the sync table.
+       *
+       * @param {Options} options Options.
+       * @returns {Promise} The response.
+       */
+      clean: function(query, options) {
+        // Debug.
+        logger.debug('Cleaning the local sync table.', arguments);
+
+        // Cast arguments.
+        options = options || {};
+
+        // Prepare the response.
+        var promise = Database.clean(Sync.system, query, options);
+
+        // Debug.
+        promise.then(function(response) {
+          logger.debug('Cleaned the sync table.', response);
+        }, function(error) {
+          logger.error('Failed to clean the sync table.', error);
         });
 
         // Return the response.
