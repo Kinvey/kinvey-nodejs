@@ -154,7 +154,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.6.2';
+    Kinvey.SDK_VERSION = '1.6.3';
 
     // Properties.
     // -----------
@@ -413,7 +413,7 @@
         // Initialize the synchronization namespace and restore the active user.
         return Kinvey.Sync.init(options.sync);
       }).then(function() {
-        logger.debug('Kinvey initialized, running version: js-nodejs/1.6.2');
+        logger.debug('Kinvey initialized, running version: js-nodejs/1.6.3');
         return restoreActiveUser(options);
       });
 
@@ -1777,7 +1777,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.6.2'];
+      var parts = ['js-nodejs/1.6.3'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -4622,40 +4622,42 @@
         }
         // Step 1: Check authorization grant type
         else if(MIC.AuthorizationGrant.AuthorizationCodeLoginPage === authorizationGrant) {
-          if(this.isNode()) {
+          if(this.isHTML5() || this.isAngular() || this.isBackbone() || this.isPhoneGap() || this.isTitanium()) {
+            // Step 2: Request a code
+            promise = MIC.requestCodeWithPopup(clientId, redirectUri, options);
+          }
+          else {
             error = new Kinvey.Error(MIC.AuthorizationGrant.AuthorizationCodeLoginPage + ' grant is not supported.');
             return wrapCallbacks(Kinvey.Defer.reject(error), options);
           }
-
-          // Step 2: Request a code
-          promise = MIC.requestCodeWithPopup(clientId, redirectUri, options);
         }
         else if(MIC.AuthorizationGrant.AuthorizationCodeAPI === authorizationGrant) {
-          if(this.isHTML5() || this.isAngular() || this.isBackbone() || this.isPhoneGap() || this.isTitanium()) {
+          if(this.isTitanium() || this.isNode()) {
+            if(null == options.username) {
+              error = new Kinvey.Error('A username must be provided to login with MIC using the ' +
+                MIC.AuthorizationGrant.AuthorizationCodeAPI + ' grant.');
+              return wrapCallbacks(Kinvey.Defer.reject(error), options);
+            }
+
+            if(null == options.password) {
+              error = new Kinvey.Error('A password must be provided to login with MIC using the ' +
+                MIC.AuthorizationGrant.AuthorizationCodeAPI + ' grant.');
+              return wrapCallbacks(Kinvey.Defer.reject(error), options);
+            }
+
+            // Step 2a: Request a temp login uri
+            promise = MIC.requestUrl(clientId, redirectUri, options).then(function(url) {
+              // Step 2b: Request a code
+              // options.url = url + '?client_id=' + encodeURIComponent(clientId) + '&redirect_uri=' + encodeURIComponent(redirectUri) +
+              //   '&response_type=code&username=' + encodeURIComponent(options.username) +
+              //   '&password=' + encodeURIComponent(options.password);
+              return MIC.requestCodeWithUrl(url, clientId, redirectUri, options);
+            });
+          }
+          else {
             error = new Kinvey.Error(MIC.AuthorizationGrant.AuthorizationCodeAPI + ' grant is not supported.');
             return wrapCallbacks(Kinvey.Defer.reject(error), options);
           }
-
-          if(null == options.username) {
-            error = new Kinvey.Error('A username must be provided to login with MIC using the ' +
-              MIC.AuthorizationGrant.AuthorizationCodeAPI + ' grant.');
-            return wrapCallbacks(Kinvey.Defer.reject(error), options);
-          }
-
-          if(null == options.password) {
-            error = new Kinvey.Error('A password must be provided to login with MIC using the ' +
-              MIC.AuthorizationGrant.AuthorizationCodeAPI + ' grant.');
-            return wrapCallbacks(Kinvey.Defer.reject(error), options);
-          }
-
-          // Step 2a: Request a temp login uri
-          promise = MIC.requestUrl(clientId, redirectUri, options).then(function(url) {
-            // Step 2b: Request a code
-            // options.url = url + '?client_id=' + encodeURIComponent(clientId) + '&redirect_uri=' + encodeURIComponent(redirectUri) +
-            //   '&response_type=code&username=' + encodeURIComponent(options.username) +
-            //   '&password=' + encodeURIComponent(options.password);
-            return MIC.requestCodeWithUrl(url, clientId, redirectUri, options);
-          });
         }
         else {
           // Reject with error because of invalid authorization grant
@@ -4748,6 +4750,7 @@
       requestUrl: function(clientId, redirectUri, options) {
         var url = Kinvey.MICHostName;
         options.micApiVersion = options.micApiVersion || Kinvey.MICAPIVersion;
+        options.autoRedirect = false;
 
         // Set the MIC API version
         if(options.micApiVersion != null) {
@@ -5048,6 +5051,9 @@
        * @return {Promise}            Code.
        */
       requestCodeWithUrl: function(url, clientId, redirectUri, options) {
+        options = options || {};
+        options.autoRedirect = false;
+
         // Create a request
         var request = {
           method: 'POST',
@@ -5073,6 +5079,8 @@
           request.headers,
           options
         ).then(function(response) {
+          options.autoRedirect = true;
+
           try {
             response = JSON.parse(response);
           }
@@ -5390,7 +5398,6 @@
         return Kinvey.User.logout(options);
       }
     };
-
 
 
     // Querying.
@@ -7736,7 +7743,8 @@
               response = {
                 name: response.error,
                 description: response.description || '',
-                debug: response.debug || ''
+                debug: response.debug || '',
+                stack: response.stack || ''
               };
 
               // If `options.trace`, add the `requestId`.
@@ -8853,18 +8861,15 @@
             }
 
             // Handle redirects
-            if(3 === parseInt(status / 100, 10) && 304 !== status) {
-              if((path.protocol + '//' + path.hostname).indexOf(Kinvey.MICHostName) === 0) {
-                var location = response.headers.location;
+            if(3 === parseInt(status / 100, 10) && url.indexOf(Kinvey.MICHostName) === 0) {
+              var location = response.headers.location;
+
+              if(location) {
                 var redirectPath = NodeHttp.url.parse(location);
                 return deferred.resolve(parseQueryString(redirectPath.search));
               }
 
-              // Unless `options.file`, convert the response to a string.
-              if(!options.file) {
-                responseData = responseData.toString() || null;
-              }
-              deferred.resolve(responseData);
+              return deferred.reject(new Kinvey.Error('No location header found. There might be a problem with your MIC setup on the backend.'));
             }
             else if(2 === parseInt(status / 100, 10) || 304 === status) {
               // Unless `options.file`, convert the response to a string.
