@@ -154,7 +154,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.6.3';
+    Kinvey.SDK_VERSION = '1.6.4';
 
     // Properties.
     // -----------
@@ -264,7 +264,7 @@
           // Restore the options and return the response.
           options.success = fnSuccess;
           options.error = fnError;
-          return Kinvey.Defer.reject(error);
+          return Kinvey.Defer.resolve(null);
         });
       });
     };
@@ -413,7 +413,7 @@
         // Initialize the synchronization namespace and restore the active user.
         return Kinvey.Sync.init(options.sync);
       }).then(function() {
-        logger.debug('Kinvey initialized, running version: js-nodejs/1.6.3');
+        logger.debug('Kinvey initialized, running version: js-nodejs/1.6.4');
         return restoreActiveUser(options);
       });
 
@@ -1777,7 +1777,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.6.3'];
+      var parts = ['js-nodejs/1.6.4'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -3858,14 +3858,8 @@
             namespace: USERS,
             collection: '_logout',
             auth: Auth.Session
-          }, options).then(null, function(error) {
-            // Clear the active user on `INVALID_CREDENTIALS`.
-            if(Kinvey.Error.INVALID_CREDENTIALS === error.name || Kinvey.Error.EMAIL_VERIFICATION_REQUIRED === error.name) {
-              // Debug.
-              logger.error('The user credentials are invalid. Returning success because of the force flag.');
-              return null;
-            }
-            return Kinvey.Defer.reject(error);
+          }, options).then(null, function() {
+            return null;
           }).then(function() {
             // Disconnect MIC
             return MIC.disconnect();
