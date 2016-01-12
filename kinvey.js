@@ -1,5 +1,5 @@
 /*!
- * Copyright (c) 2015 Kinvey, Inc.
+ * Copyright (c) 2016 Kinvey, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -154,7 +154,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.6.4';
+    Kinvey.SDK_VERSION = '1.6.5';
 
     // Properties.
     // -----------
@@ -413,7 +413,7 @@
         // Initialize the synchronization namespace and restore the active user.
         return Kinvey.Sync.init(options.sync);
       }).then(function() {
-        logger.debug('Kinvey initialized, running version: js-nodejs/1.6.4');
+        logger.debug('Kinvey initialized, running version: js-nodejs/1.6.5');
         return restoreActiveUser(options);
       });
 
@@ -1777,7 +1777,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.6.4'];
+      var parts = ['js-nodejs/1.6.5'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -5083,8 +5083,7 @@
           return response.code;
         }, function(error) {
           error = clientError(Kinvey.Error.MIC_ERROR, {
-            debug: 'Unable to authorize user with username ' + options.username + ' and ' +
-              'password ' + options.password + '.'
+            debug: 'Unable to authorize user with username ' + options.username + '.'
           });
           throw error;
         });
