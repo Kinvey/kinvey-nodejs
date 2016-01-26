@@ -154,7 +154,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.6.5';
+    Kinvey.SDK_VERSION = '1.6.6';
 
     // Properties.
     // -----------
@@ -413,7 +413,7 @@
         // Initialize the synchronization namespace and restore the active user.
         return Kinvey.Sync.init(options.sync);
       }).then(function() {
-        logger.debug('Kinvey initialized, running version: js-nodejs/1.6.5');
+        logger.debug('Kinvey initialized, running version: js-nodejs/1.6.6');
         return restoreActiveUser(options);
       });
 
@@ -1777,7 +1777,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.6.5'];
+      var parts = ['js-nodejs/1.6.6'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -8121,25 +8121,15 @@
           // Step 4: update the metadata.
           return Database.findAndModify(Sync.system, collection, function(metadata) {
             // Remove each document from the metadata that was synced
-            result.success.forEach(function(id) {
-              if(metadata.documents.hasOwnProperty(id)) {
-                metadata.size -= 1;
-                delete metadata.documents[id];
-              }
-            });
-
-            // Remove id's that were created offline, synced with the Kinvey Cloud and
-            // didn't result in an error
-            try {
-              var ids = Object.keys(metadata.documents);
-              ids.forEach(function(id) {
-                if(metadata.documents.hasOwnProperty(id) && result.error.indexOf(id) === -1) {
+            for(var key in result.success) {
+              if(result.success.hasOwnProperty(key)) {
+                var successObj = result.success[key];
+                if(metadata.documents.hasOwnProperty(successObj.id)) {
                   metadata.size -= 1;
-                  delete metadata.documents[id];
+                  delete metadata.documents[successObj.id];
                 }
-              });
+              }
             }
-            catch(err) {}
 
             // Return the new metadata.
             return metadata;
@@ -8288,15 +8278,19 @@
 
           return Kinvey.Defer.all(promises).then(function() {
             return {
-              success: [id],
+              success: [{
+                id: id,
+                doc: null
+              }],
               error: []
             };
           }, function(err) {
             return {
               success: [],
               error: [{
-                id: id,
-                error: err
+                id: {
+                  error: err
+                }
               }]
             };
           });
@@ -8424,14 +8418,17 @@
             }, requestOptions).then(function(createdDoc) {
               // Remove the doc created offline
               return Database.destroy(collection, originalId).then(function() {
-                return createdDoc;
+                return {
+                  id: originalId,
+                  doc: createdDoc
+                };
               });
             }, function(err) {
               document._id = originalId;
               // Rejection should not break the entire synchronization. Instead,
               // append the document id to `error`, and resolve.
               error.push({
-                id: document._id,
+                id: originalId,
                 error: err
               });
               return null;
@@ -8445,7 +8442,12 @@
             id: document._id,
             data: document,
             auth: Auth.Default
-          }, requestOptions).then(null, function(err) {
+          }, requestOptions).then(function(doc) {
+            return {
+              id: doc._id,
+              doc: doc
+            };
+          }, function(err) {
             // Rejection should not break the entire synchronization. Instead,
             // append the document id to `error`, and resolve.
             error.push({
@@ -8457,19 +8459,25 @@
         });
 
         return Kinvey.Defer.all(promises).then(function(responses) {
+          return responses.filter(function(response) {
+            return response ? true : false;
+          });
+        }).then(function(responses) {
           // `responses` is an `Array` of documents. Batch save all documents.
           return Kinvey.Persistence.Local.create({
             namespace: USERS === collection ? USERS : DATA_STORE,
             collection: USERS === collection ? null : collection,
-            data: responses,
+            data: responses.map(function(response) {
+              return response.doc;
+            }),
             auth: Auth.Default
-          }, options);
-        }).then(function(response) {
+          }, options).then(function() {
+            return responses;
+          });
+        }).then(function(responses) {
           // Build the final response.
           return {
-            success: response.map(function(document) {
-              return document._id;
-            }),
+            success: responses,
             error: error
           };
         }, function(err) {
