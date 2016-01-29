@@ -15,7 +15,7 @@ You can add the library in three ways. The recommended way to add the module to 
 {
   ...
   "dependencies": {
-    "kinvey": "~1.6"
+    "kinvey": "~3.0"
     ...
   }
   ...
@@ -31,7 +31,7 @@ npm update
 Alternatively, you can install the module directly from the command line:
 
 ```bash
-npm install kinvey
+npm install kinvey --save
 ```
 
 Finally, you can also clone the repository and create a symbolic link to the module:
@@ -46,8 +46,8 @@ Now, the library is available for use in your project. Import the library in you
 ```javascript
 var Kinvey = require('kinvey');
 Kinvey.init({
-    appKey    : 'App Key',
-    appSecret : 'App Secret'
+    appKey: '<appKey>',
+    appSecret: '<appSecret>'
 });
 ```
 
@@ -55,13 +55,10 @@ Kinvey.init({
 You can use the following snippet to verify the app credentials were entered correctly. This function will contact the backend and verify that the library can communicate with your app.
 
 ```javascript
-Kinvey.ping({
-    success: function(response) {
-        console.log('Kinvey Ping Success. Kinvey Service is alive, version: ' + response.version + ', response: ' + response.kinvey);
-    },
-    error: function(error) {
-        console.log('Kinvey Ping Failed. Response: ' + error.description);
-    }
+Kinvey.ping().then(function(response) {
+  console.log('Kinvey Ping Success. Kinvey Service is alive, version: ' + response.version + ', response: ' + response.kinvey);
+}).catch(function(error) {
+  console.log('Kinvey Ping Failed. Response: ' + error.description);
 });
 ```
 
@@ -70,7 +67,7 @@ You are now ready to start building your awesome apps! Next we recommend diving 
 
 ## License
 
-    Copyright 2015 Kinvey, Inc.
+    Copyright 2016 Kinvey, Inc.
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.

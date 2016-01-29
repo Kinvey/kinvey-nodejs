@@ -1,7 +1,5 @@
-.project
-.settings
-
-# JetBrains IDEs
-.idea
-
 .DS_Store
+.project
+.idea
+.settings
+node_modules

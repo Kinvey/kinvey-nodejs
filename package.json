@@ -1,24 +1,44 @@
 {
-  "name"        : "kinvey",
-  "version"     : "1.6.6",
-  "description" : "Kinvey JavaScript Library for Node.js.",
-  "homepage"    : "http://www.kinvey.com",
-  "bugs"        : { "email": "support@kinvey.com" },
-  "licenses"    : [{
-    "type" : "Apache-2.0",
-    "url"  : "http://www.apache.org/licenses/LICENSE-2.0"
-  }],
-  "author"      : "Kinvey, Inc.",
-  "main"        : "./kinvey.js",
-  "repository"  : {
-    "type" : "git",
-    "url"  : "https://github.com/Kinvey/kinvey-nodejs.git"
+  "name": "kinvey",
+  "version": "3.0.0-beta.1",
+  "description": "Kinvey JavaScript Library for NodeJS.",
+  "homepage": "http://www.kinvey.com",
+  "bugs": {
+    "url": "http://support.kinvey.com",
+    "email": "support@kinvey.com"
   },
+  "licenses": [
+    {
+      "type": "Apache-2.0",
+      "url": "https://raw.github.com/Kinvey/kinvey-nodejs/master/LICENSE.txt"
+    }
+  ],
+  "author": "Kinvey, Inc.",
+  "main": "./index.js",
+  "contributors": [
+    "Thomas Conner <thomas@kinvey.com>"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:Kinvey/kinvey-nodejs"
+  },
+  "scripts": {},
   "dependencies": {
-    "loglevel": "~1.4.0",
-    "promiscuous": "~0.6",
-    "promise-queue": "git+https://github.com/ThomasConner/promise-queue.git"
+    "fake-indexeddb": "^1.0.3",
+    "hellojs": "^1.10.1",
+    "lodash": "^3.0.0",
+    "loglevel": "^1.3.1",
+    "qs": "^6.0.1",
+    "request": "^2.67.0",
+    "sift": "^3.0.0",
+    "url-pattern": "^1.0.0"
   },
-  "devDependencies" : {},
-  "engines"         : { "node": ">=0.10" }
+  "engines": {
+    "node": ">=4.0"
+  },
+  "keywords": [
+    "Kinvey",
+    "NodeJS",
+    "HTML5"
+  ]
 }
