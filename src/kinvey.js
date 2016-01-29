@@ -10,6 +10,10 @@ var _aggregation = require('./core/aggregation');
 
 var _aggregation2 = _interopRequireDefault(_aggregation);
 
+var _auth = require('./core/auth');
+
+var _auth2 = _interopRequireDefault(_auth);
+
 var _client = require('./core/client');
 
 var _client2 = _interopRequireDefault(_client);
@@ -17,10 +21,6 @@ var _client2 = _interopRequireDefault(_client);
 var _command = require('./core/command');
 
 var _command2 = _interopRequireDefault(_command);
-
-var _enums = require('./core/enums');
-
-var _enums2 = _interopRequireDefault(_enums);
 
 var _file = require('./core/models/file');
 
@@ -37,6 +37,10 @@ var _log2 = _interopRequireDefault(_log);
 var _metadata = require('./core/metadata');
 
 var _metadata2 = _interopRequireDefault(_metadata);
+
+var _networkRequest = require('./core/requests/networkRequest');
+
+var _networkRequest2 = _interopRequireDefault(_networkRequest);
 
 var _query = require('./core/query');
 
@@ -58,9 +62,13 @@ var _users = require('./core/stores/users');
 
 var _users2 = _interopRequireDefault(_users);
 
+var _enums = require('./core/enums');
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var appdataNamespace = process.env.KINVEY_DATASTORE_NAMESPACE || 'appdata';
 
 var Kinvey = function () {
   function Kinvey() {
@@ -73,6 +81,35 @@ var Kinvey = function () {
       var client = _client2.default.init(options);
       return client;
     }
+  }, {
+    key: 'ping',
+    value: function ping() {
+      var client = undefined;
+
+      try {
+        client = _client2.default.sharedInstance();
+      } catch (err) {
+        client = new _client2.default({
+          appKey: '',
+          appSecret: ''
+        });
+      }
+
+      var request = new _networkRequest2.default({
+        method: _enums.HttpMethod.GET,
+        client: client,
+        auth: client.appKey !== '' ? _auth2.default.all : _auth2.default.none,
+        pathname: appdataNamespace
+      });
+
+      return request.execute().then(function (response) {
+        if (response.isSuccess()) {
+          return response.data;
+        }
+
+        throw response.error;
+      });
+    }
   }]);
 
   return Kinvey;
@@ -81,18 +118,18 @@ var Kinvey = function () {
 exports.default = Kinvey;
 
 Kinvey.Aggregation = _aggregation2.default;
+Kinvey.AuthorizationGrant = _enums.AuthorizationGrant;
 Kinvey.Command = _command2.default;
 Kinvey.DataStore = _datastore2.default;
+Kinvey.DataStoreType = _enums.DataStoreType;
 Kinvey.File = _file2.default;
 Kinvey.Files = _files2.default;
 Kinvey.Log = _log2.default;
 Kinvey.Metadata = _metadata2.default;
 Kinvey.Promise = Promise;
 Kinvey.Query = _query2.default;
+Kinvey.ReadPolicy = _enums.ReadPolicy;
+Kinvey.SocialIdentity = _enums.SocialIdentity;
 Kinvey.Sync = _sync2.default;
 Kinvey.User = _user2.default;
 Kinvey.Users = _users2.default;
-
-['AuthorizationGrant', 'ReadPolicy', 'SocialIdentity', 'DataStoreType'].forEach(function (enumKey) {
-  Kinvey[enumKey] = _enums2.default[enumKey];
-});
