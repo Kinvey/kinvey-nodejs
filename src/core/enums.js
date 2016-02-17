@@ -3,7 +3,9 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-
+/**
+ * Enum for Mobile Identity Connect authorization grants.
+ */
 var AuthorizationGrant = {
   AuthorizationCodeLoginPage: 'AuthorizationCodeLoginPage',
   AuthorizationCodeAPI: 'AuthorizationCodeAPI'
@@ -11,23 +13,22 @@ var AuthorizationGrant = {
 Object.freeze(AuthorizationGrant);
 exports.AuthorizationGrant = AuthorizationGrant;
 
-var CacheAdapter = {
-  IndexedDB: 'IndexedDB',
-  LocalStorage: 'LocalStorage',
-  Memory: 'Memory',
-  WebSQL: 'WebSQL'
-};
-Object.freeze(CacheAdapter);
-exports.CacheAdapter = CacheAdapter;
+/**
+ * Enum for DataStore types.
+ */
 
-var ReadPolicy = {
-  LocalOnly: 'LocalOnly',
-  LocalFirst: 'LocalFirst',
-  NetworkOnly: 'NetworkOnly',
-  NetworkFirst: 'NetworkFirst'
+var DataStoreType = {
+  Sync: 'Sync',
+  Cache: 'Cache',
+  Network: 'Network'
 };
-Object.freeze(ReadPolicy);
-exports.ReadPolicy = ReadPolicy;
+Object.freeze(DataStoreType);
+exports.DataStoreType = DataStoreType;
+
+/**
+ * @private
+ * Enum for Http Methods.
+ */
 
 var HttpMethod = {
   GET: 'GET',
@@ -39,12 +40,10 @@ var HttpMethod = {
 Object.freeze(HttpMethod);
 exports.HttpMethod = HttpMethod;
 
-var RackType = {
-  Network: 'Network',
-  Cache: 'Cache'
-};
-Object.freeze(RackType);
-exports.RackType = RackType;
+/**
+ * @private
+ * Enum for Response types.
+ */
 
 var ResponseType = {
   Blob: 'blob',
@@ -56,6 +55,10 @@ var ResponseType = {
 Object.freeze(ResponseType);
 exports.ResponseType = ResponseType;
 
+/**
+ * Enum for Social Identities.
+ */
+
 var SocialIdentity = {
   Facebook: 'facebook',
   Google: 'google',
@@ -63,6 +66,11 @@ var SocialIdentity = {
 };
 Object.freeze(SocialIdentity);
 exports.SocialIdentity = SocialIdentity;
+
+/**
+ * @provate
+ * Enum for Status Codes.
+ */
 
 var StatusCode = {
   Ok: 200,
@@ -74,20 +82,3 @@ var StatusCode = {
 };
 Object.freeze(StatusCode);
 exports.StatusCode = StatusCode;
-
-var DataStoreType = {
-  Sync: 'Sync',
-  Cache: 'Cache',
-  Network: 'Network'
-};
-Object.freeze(DataStoreType);
-exports.DataStoreType = DataStoreType;
-
-var WritePolicy = {
-  LocalOnly: 'LocalOnly',
-  LocalFirst: 'LocalFirst',
-  NetworkOnly: 'NetworkOnly',
-  NetworkFirst: 'NetworkFirst'
-};
-Object.freeze(WritePolicy);
-exports.WritePolicy = WritePolicy;

@@ -3,18 +3,13 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+exports.ParseMiddleware = undefined;
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 var _get = function get(object, property, receiver) { if (object === null) object = Function.prototype; var desc = Object.getOwnPropertyDescriptor(object, property); if (desc === undefined) { var parent = Object.getPrototypeOf(object); if (parent === null) { return undefined; } else { return get(parent, property, receiver); } } else if ("value" in desc) { return desc.value; } else { var getter = desc.get; if (getter === undefined) { return undefined; } return getter.call(receiver); } };
 
-var _request = require('./request');
-
-var _request2 = _interopRequireDefault(_request);
-
-var _networkRack = require('../rack/racks/networkRack');
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+var _middleware = require('../middleware');
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
@@ -26,36 +21,41 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
  * @private
  */
 
-var NetworkRequest = function (_Request) {
-  _inherits(NetworkRequest, _Request);
+var ParseMiddleware = exports.ParseMiddleware = function (_KinveyMiddleware) {
+  _inherits(ParseMiddleware, _KinveyMiddleware);
 
-  function NetworkRequest() {
-    _classCallCheck(this, NetworkRequest);
+  function ParseMiddleware() {
+    var name = arguments.length <= 0 || arguments[0] === undefined ? 'Kinvey Parse Middleware' : arguments[0];
 
-    return _possibleConstructorReturn(this, Object.getPrototypeOf(NetworkRequest).apply(this, arguments));
+    _classCallCheck(this, ParseMiddleware);
+
+    return _possibleConstructorReturn(this, Object.getPrototypeOf(ParseMiddleware).call(this, name));
   }
 
-  _createClass(NetworkRequest, [{
-    key: 'execute',
-    value: function execute() {
-      var _this2 = this;
+  _createClass(ParseMiddleware, [{
+    key: 'handle',
+    value: function handle(request) {
+      return _get(Object.getPrototypeOf(ParseMiddleware.prototype), 'handle', this).call(this, request).then(function () {
+        var response = request.response;
 
-      var promise = _get(Object.getPrototypeOf(NetworkRequest.prototype), 'execute', this).call(this).then(function () {
-        var networkRack = _networkRack.NetworkRack.sharedInstance();
-        return networkRack.execute(_this2);
+        if (response && response.data) {
+          var contentType = response.headers['content-type'] || response.headers['Content-Type'];
+
+          if (contentType.indexOf('application/json') === 0) {
+            try {
+              response.data = JSON.parse(response.data);
+            } catch (err) {
+              response.data = response.data;
+            }
+
+            request.response = response;
+          }
+        }
+
+        return request;
       });
-
-      return promise;
-    }
-  }, {
-    key: 'cancel',
-    value: function cancel() {
-      var networkRack = _networkRack.NetworkRack.sharedInstance();
-      networkRack.cancel();
     }
   }]);
 
-  return NetworkRequest;
-}(_request2.default);
-
-exports.default = NetworkRequest;
+  return ParseMiddleware;
+}(_middleware.KinveyMiddleware);

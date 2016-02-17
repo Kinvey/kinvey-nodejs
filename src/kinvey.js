@@ -1,10 +1,10 @@
 'use strict';
 
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 var _aggregation = require('./core/aggregation');
 
@@ -22,13 +22,9 @@ var _command = require('./core/command');
 
 var _command2 = _interopRequireDefault(_command);
 
-var _file = require('./core/models/file');
+var _filesStore = require('./core/stores/filesStore');
 
-var _file2 = _interopRequireDefault(_file);
-
-var _files = require('./core/stores/files');
-
-var _files2 = _interopRequireDefault(_files);
+var _filesStore2 = _interopRequireDefault(_filesStore);
 
 var _log = require('./core/log');
 
@@ -46,9 +42,9 @@ var _query = require('./core/query');
 
 var _query2 = _interopRequireDefault(_query);
 
-var _datastore = require('./core/stores/datastore');
+var _dataStore = require('./core/stores/dataStore');
 
-var _datastore2 = _interopRequireDefault(_datastore);
+var _dataStore2 = _interopRequireDefault(_dataStore);
 
 var _sync = require('./core/sync');
 
@@ -58,9 +54,9 @@ var _user = require('./core/models/user');
 
 var _user2 = _interopRequireDefault(_user);
 
-var _users = require('./core/stores/users');
+var _usersStore = require('./core/stores/usersStore');
 
-var _users2 = _interopRequireDefault(_users);
+var _usersStore2 = _interopRequireDefault(_usersStore);
 
 var _enums = require('./core/enums');
 
@@ -77,29 +73,48 @@ var Kinvey = function () {
 
   _createClass(Kinvey, null, [{
     key: 'init',
+
+    /**
+     * Initializes the library with your app's information.
+     *
+     * @param   {Object}        options                         Options
+     * @param   {string}        options.appKey                  My app key
+     * @param   {string}        [options.appSecret]             My app secret
+     * @param   {string}        [options.masterSecret]          My app's master secret
+     * @param   {string}        [options.encryptionKey]         My app's encryption key
+     * @param   {string}        [options.protocol]              The protocol of the client.
+     * @param   {string}        [options.host]                  The host of the client.
+     * @return  {Client}                                        An instance of Client.
+     *
+     * @throws  {KinveyError}  If an `options.appKey` is not provided.
+     * @throws  {KinveyError}  If neither an `options.appSecret` or `options.masterSecret` is provided.
+     *
+     * @example
+     * var client = Kinvey.init({
+     *   appKey: 'appKey',
+     *   appSecret: 'appSecret'
+     * });
+     */
     value: function init(options) {
       var client = _client2.default.init(options);
       return client;
     }
+
+    /**
+     * Pings the Kinvey service.
+     *
+     * @returns {Promise} The response.
+     */
+
   }, {
     key: 'ping',
     value: function ping() {
-      var client = undefined;
-
-      try {
-        client = _client2.default.sharedInstance();
-      } catch (err) {
-        client = new _client2.default({
-          appKey: '',
-          appSecret: ''
-        });
-      }
-
+      var client = _client2.default.sharedInstance();
       var request = new _networkRequest2.default({
         method: _enums.HttpMethod.GET,
         client: client,
-        auth: client.appKey !== '' ? _auth2.default.all : _auth2.default.none,
-        pathname: appdataNamespace
+        auth: _auth2.default.all,
+        pathname: appdataNamespace + '/' + client.appKey
       });
 
       return request.execute().then(function (response) {
@@ -117,13 +132,13 @@ var Kinvey = function () {
 
 exports.default = Kinvey;
 
+
 Kinvey.Aggregation = _aggregation2.default;
 Kinvey.AuthorizationGrant = _enums.AuthorizationGrant;
 Kinvey.Command = _command2.default;
-Kinvey.DataStore = _datastore2.default;
+Kinvey.DataStore = _dataStore2.default;
 Kinvey.DataStoreType = _enums.DataStoreType;
-Kinvey.File = _file2.default;
-Kinvey.Files = _files2.default;
+Kinvey.Files = _filesStore2.default;
 Kinvey.Log = _log2.default;
 Kinvey.Metadata = _metadata2.default;
 Kinvey.Promise = Promise;
@@ -132,4 +147,4 @@ Kinvey.ReadPolicy = _enums.ReadPolicy;
 Kinvey.SocialIdentity = _enums.SocialIdentity;
 Kinvey.Sync = _sync2.default;
 Kinvey.User = _user2.default;
-Kinvey.Users = _users2.default;
+Kinvey.Users = _usersStore2.default;

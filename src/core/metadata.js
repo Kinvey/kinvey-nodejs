@@ -1,10 +1,10 @@
 'use strict';
 
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 var _acl = require('./acl');
 
@@ -12,11 +12,11 @@ var _acl2 = _interopRequireDefault(_acl);
 
 var _errors = require('./errors');
 
-var _clone = require('lodash/lang/clone');
+var _clone = require('lodash/clone');
 
 var _clone2 = _interopRequireDefault(_clone);
 
-var _isPlainObject = require('lodash/lang/isPlainObject');
+var _isPlainObject = require('lodash/isPlainObject');
 
 var _isPlainObject2 = _interopRequireDefault(_isPlainObject);
 
@@ -28,6 +28,10 @@ var kmdAttribute = process.env.KINVEY_KMD_ATTRIBUTE || '_kmd';
 var aclAttribute = process.env.KINVEY_ACL_ATTRIBUTE || '_acl';
 var privateMetadataSymbol = Symbol();
 
+/**
+ * @private
+ */
+
 var PrivateMetadata = function () {
   function PrivateMetadata() {
     var entity = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
@@ -38,10 +42,28 @@ var PrivateMetadata = function () {
       throw new Error('kmd argument must be an object');
     }
 
+    /**
+     * The acl properties.
+     *
+     * @private
+     * @type {Object}
+     */
     this.acl = new _acl2.default(entity[aclAttribute]);
 
+    /**
+     * The kmd properties.
+     *
+     * @private
+     * @type {Object}
+     */
     this.kmd = entity[kmdAttribute];
 
+    /**
+     * The entity.
+     *
+     * @private
+     * @type {Object}
+     */
     this.entity = entity;
   }
 
@@ -97,6 +119,15 @@ var PrivateMetadata = function () {
   return PrivateMetadata;
 }();
 
+/**
+ * Wrapper for accessing the `_acl` and `_kmd` properties of an entity.
+ *
+ * @example
+ * var entity = { _acl: {}, _kmd: {}};
+ * var metadata = new Kinvey.Metadat(entity);
+ */
+
+
 var Metadata = function () {
   function Metadata(entity) {
     _classCallCheck(this, Metadata);
@@ -104,8 +135,25 @@ var Metadata = function () {
     this[privateMetadataSymbol] = new PrivateMetadata(entity);
   }
 
+  /**
+   * Sets the entity ACL.
+   *
+   * @param   {Acl}       acl       The ACL.
+   * @returns {Metadata}            The metadata.
+   *
+   * @throws  {KinveyError} `acl` must be of type `Kinvey.Acl`.
+   */
+
+
   _createClass(Metadata, [{
     key: 'toJSON',
+
+
+    /**
+     * Returns JSON representation of the entity.
+     *
+     * @returns {Object} The metadata.
+     */
     value: function toJSON() {
       return this[privateMetadataSymbol].toJSON();
     }
@@ -115,16 +163,37 @@ var Metadata = function () {
       this[privateMetadataSymbol].acl = acl;
       return this;
     }
+
+    /**
+     * Returns the date when the entity was created.
+     *
+     * @returns {?Date} Created at date, or `null` if not set.
+     */
+
   }, {
     key: 'createdAt',
     get: function get() {
       return this[privateMetadataSymbol].createdAt;
     }
+
+    /**
+    * Returns the email verification status.
+    *
+    * @returns {?Object} The email verification status, or `null` if not set.
+    */
+
   }, {
     key: 'emailVerification',
     get: function get() {
       return this[privateMetadataSymbol].emailVerification;
     }
+
+    /**
+     * Returns the date when the entity was last modified.
+     *
+     * @returns {?Date} Last modified date, or `null` if not set.
+     */
+
   }, {
     key: 'lastModified',
     get: function get() {

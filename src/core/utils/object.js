@@ -5,29 +5,37 @@ Object.defineProperty(exports, "__esModule", {
 });
 exports.nested = nested;
 exports.isDefined = isDefined;
-function nested(document, dotProperty, value) {
+
+var _clone = require('lodash/clone');
+
+var _clone2 = _interopRequireDefault(_clone);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/**
+ * @private
+ */
+function nested(obj, dotProperty, value) {
+  obj = (0, _clone2.default)(obj, true);
+
   if (!dotProperty) {
-    document = typeof value === 'undefined' ? document : value;
-    return document;
+    obj = value ? value : obj;
+    return obj;
   }
 
-  var obj = document;
   var parts = dotProperty.split('.');
-
   var current = parts.shift();
-  while (current && obj && obj.hasOwnProperty(current)) {
-    if (parts.length === 0) {
-      obj[current] = typeof value === 'undefined' ? obj[current] : value;
-      return obj[current];
-    }
-
+  while (current && obj) {
     obj = obj[current];
     current = parts.shift();
   }
 
-  return null;
+  return value ? value : obj;
 }
 
+/**
+ * @private
+ */
 function isDefined(obj) {
   return obj !== undefined && obj !== null;
 }

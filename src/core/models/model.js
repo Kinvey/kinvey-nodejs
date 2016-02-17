@@ -1,12 +1,12 @@
 'use strict';
 
-var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
-
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+
+var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 var _acl = require('../acl');
 
@@ -20,19 +20,19 @@ var _client = require('../client');
 
 var _client2 = _interopRequireDefault(_client);
 
-var _defaults = require('lodash/object/defaults');
+var _defaults = require('lodash/defaults');
 
 var _defaults2 = _interopRequireDefault(_defaults);
 
-var _result = require('lodash/object/result');
+var _result = require('lodash/result');
 
 var _result2 = _interopRequireDefault(_result);
 
-var _clone = require('lodash/lang/clone');
+var _clone = require('lodash/clone');
 
 var _clone2 = _interopRequireDefault(_clone);
 
-var _assign = require('lodash/object/assign');
+var _assign = require('lodash/assign');
 
 var _assign2 = _interopRequireDefault(_assign);
 
@@ -44,6 +44,10 @@ var localIdPrefix = process.env.KINVEY_ID_PREFIX || 'local_';
 var idAttribute = process.env.KINVEY_ID_ATTRIBUTE || '_id';
 var aclAttribute = process.env.KINVEY_ACL_ATTRIBUTE || '_acl';
 var kmdAttribute = process.env.KINVEY_KMD_ATTRIBUTE || '_kmd';
+
+/**
+ * @private
+ */
 
 var Model = function () {
   function Model() {

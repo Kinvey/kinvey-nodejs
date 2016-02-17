@@ -3,18 +3,13 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+exports.SerializeMiddleware = undefined;
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 var _get = function get(object, property, receiver) { if (object === null) object = Function.prototype; var desc = Object.getOwnPropertyDescriptor(object, property); if (desc === undefined) { var parent = Object.getPrototypeOf(object); if (parent === null) { return undefined; } else { return get(parent, property, receiver); } } else if ("value" in desc) { return desc.value; } else { var getter = desc.get; if (getter === undefined) { return undefined; } return getter.call(receiver); } };
 
-var _request = require('./request');
-
-var _request2 = _interopRequireDefault(_request);
-
-var _networkRack = require('../rack/racks/networkRack');
-
-function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+var _middleware = require('../middleware');
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
@@ -26,36 +21,44 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
  * @private
  */
 
-var NetworkRequest = function (_Request) {
-  _inherits(NetworkRequest, _Request);
+var SerializeMiddleware = exports.SerializeMiddleware = function (_KinveyMiddleware) {
+  _inherits(SerializeMiddleware, _KinveyMiddleware);
 
-  function NetworkRequest() {
-    _classCallCheck(this, NetworkRequest);
+  function SerializeMiddleware() {
+    var name = arguments.length <= 0 || arguments[0] === undefined ? 'Kinvey Serialize Middleware' : arguments[0];
 
-    return _possibleConstructorReturn(this, Object.getPrototypeOf(NetworkRequest).apply(this, arguments));
+    _classCallCheck(this, SerializeMiddleware);
+
+    return _possibleConstructorReturn(this, Object.getPrototypeOf(SerializeMiddleware).call(this, name));
   }
 
-  _createClass(NetworkRequest, [{
-    key: 'execute',
-    value: function execute() {
-      var _this2 = this;
+  _createClass(SerializeMiddleware, [{
+    key: 'handle',
+    value: function handle(request) {
+      return _get(Object.getPrototypeOf(SerializeMiddleware.prototype), 'handle', this).call(this, request).then(function () {
+        if (request && request.data) {
+          var contentType = request.headers['content-type'] || request.headers['Content-Type'];
 
-      var promise = _get(Object.getPrototypeOf(NetworkRequest.prototype), 'execute', this).call(this).then(function () {
-        var networkRack = _networkRack.NetworkRack.sharedInstance();
-        return networkRack.execute(_this2);
+          if (contentType.indexOf('application/json') === 0) {
+            request.data = JSON.stringify(request.data);
+          } else if (contentType.indexOf('application/x-www-form-urlencoded') === 0) {
+            var data = request.data;
+            var str = [];
+
+            for (var p in data) {
+              if (data.hasOwnProperty(p)) {
+                str.push(global.encodeURIComponent(p) + '=' + global.encodeURIComponent(data[p]));
+              }
+            }
+
+            request.data = str.join('&');
+          }
+        }
+
+        return request;
       });
-
-      return promise;
-    }
-  }, {
-    key: 'cancel',
-    value: function cancel() {
-      var networkRack = _networkRack.NetworkRack.sharedInstance();
-      networkRack.cancel();
     }
   }]);
 
-  return NetworkRequest;
-}(_request2.default);
-
-exports.default = NetworkRequest;
+  return SerializeMiddleware;
+}(_middleware.KinveyMiddleware);

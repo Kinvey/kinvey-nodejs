@@ -1,10 +1,10 @@
 'use strict';
 
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 var _errors = require('./errors');
 
@@ -12,31 +12,31 @@ var _query3 = require('./query');
 
 var _query4 = _interopRequireDefault(_query3);
 
-var _clone = require('lodash/lang/clone');
+var _clone = require('lodash/clone');
 
 var _clone2 = _interopRequireDefault(_clone);
 
-var _result = require('lodash/object/result');
+var _result = require('lodash/result');
 
 var _result2 = _interopRequireDefault(_result);
 
-var _assign = require('lodash/object/assign');
+var _assign = require('lodash/assign');
 
 var _assign2 = _interopRequireDefault(_assign);
 
-var _forEach = require('lodash/collection/forEach');
+var _forEach = require('lodash/forEach');
 
 var _forEach2 = _interopRequireDefault(_forEach);
 
-var _isObject = require('lodash/lang/isObject');
+var _isObject = require('lodash/isObject');
 
 var _isObject2 = _interopRequireDefault(_isObject);
 
-var _isString = require('lodash/lang/isString');
+var _isString = require('lodash/isString');
 
 var _isString2 = _interopRequireDefault(_isString);
 
-var _isFunction = require('lodash/lang/isFunction');
+var _isFunction = require('lodash/isFunction');
 
 var _isFunction2 = _interopRequireDefault(_isFunction);
 
@@ -103,7 +103,7 @@ var PrivateAggregation = function () {
       var response = [];
       var aggregation = this.toJSON();
       var reduce = aggregation.reduce.replace(/function[\s\S]*?\([\s\S]*?\)/, '');
-      aggregation.reduce = new Function(['doc', 'out'], reduce);
+      aggregation.reduce = new Function(['doc', 'out'], reduce); // eslint-disable-line no-new-func
 
       if (this._query) {
         documents = this._query.process(documents);

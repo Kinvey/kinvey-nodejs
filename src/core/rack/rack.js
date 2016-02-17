@@ -1,12 +1,13 @@
 'use strict';
 
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
-var _get = function get(object, property, receiver) { if (object === null) object = Function.prototype; var desc = Object.getOwnPropertyDescriptor(object, property); if (desc === undefined) { var parent = Object.getPrototypeOf(object); if (parent === null) { return undefined; } else { return get(parent, property, receiver); } } else if ("value" in desc) { return desc.value; } else { var getter = desc.get; if (getter === undefined) { return undefined; } return getter.call(receiver); } };
-
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+exports.KinveyRack = exports.Rack = undefined;
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+var _get = function get(object, property, receiver) { if (object === null) object = Function.prototype; var desc = Object.getOwnPropertyDescriptor(object, property); if (desc === undefined) { var parent = Object.getPrototypeOf(object); if (parent === null) { return undefined; } else { return get(parent, property, receiver); } } else if ("value" in desc) { return desc.value; } else { var getter = desc.get; if (getter === undefined) { return undefined; } return getter.call(receiver); } };
 
 var _response = require('../requests/response');
 
@@ -14,11 +15,9 @@ var _response2 = _interopRequireDefault(_response);
 
 var _middleware = require('./middleware');
 
-var _middleware2 = _interopRequireDefault(_middleware);
-
 var _errors = require('../errors');
 
-var _result = require('lodash/object/result');
+var _result = require('lodash/result');
 
 var _result2 = _interopRequireDefault(_result);
 
@@ -30,7 +29,11 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
-var Rack = function (_Middleware) {
+/**
+ * @private
+ */
+
+var Rack = exports.Rack = function (_Middleware) {
   _inherits(Rack, _Middleware);
 
   function Rack() {
@@ -62,7 +65,7 @@ var Rack = function (_Middleware) {
     key: 'use',
     value: function use(middleware) {
       if (middleware) {
-        if (middleware instanceof _middleware2.default) {
+        if (middleware instanceof _middleware.Middleware) {
           this._middlewares.push(middleware);
           return;
         }
@@ -74,7 +77,7 @@ var Rack = function (_Middleware) {
     key: 'useBefore',
     value: function useBefore(middlewareClass, middleware) {
       if (middleware) {
-        if (middleware instanceof _middleware2.default) {
+        if (middleware instanceof _middleware.Middleware) {
           var middlewares = this.middlewares;
           var index = middlewares.findIndex(function (existingMiddleware) {
             return existingMiddleware instanceof middlewareClass;
@@ -95,7 +98,7 @@ var Rack = function (_Middleware) {
     key: 'useAfter',
     value: function useAfter(middlewareClass, middleware) {
       if (middleware) {
-        if (middleware instanceof _middleware2.default) {
+        if (middleware instanceof _middleware.Middleware) {
           var middlewares = this.middlewares;
           var index = middlewares.findIndex(function (existingMiddleware) {
             return existingMiddleware instanceof middlewareClass;
@@ -116,7 +119,7 @@ var Rack = function (_Middleware) {
     key: 'swap',
     value: function swap(middlewareClass, middleware) {
       if (middleware) {
-        if (middleware instanceof _middleware2.default) {
+        if (middleware instanceof _middleware.Middleware) {
           var middlewares = this.middlewares;
           var index = middlewares.findIndex(function (existingMiddleware) {
             return existingMiddleware instanceof middlewareClass;
@@ -213,9 +216,14 @@ var Rack = function (_Middleware) {
   }]);
 
   return Rack;
-}(_middleware2.default);
+}(_middleware.Middleware);
 
-var KinveyRack = function (_Rack) {
+/**
+ * @private
+ */
+
+
+var KinveyRack = exports.KinveyRack = function (_Rack) {
   _inherits(KinveyRack, _Rack);
 
   function KinveyRack() {
@@ -247,5 +255,3 @@ var KinveyRack = function (_Rack) {
 
   return KinveyRack;
 }(Rack);
-
-exports.default = KinveyRack;

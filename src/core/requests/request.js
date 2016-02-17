@@ -1,18 +1,14 @@
 'use strict';
 
-var _get = function get(object, property, receiver) { if (object === null) object = Function.prototype; var desc = Object.getOwnPropertyDescriptor(object, property); if (desc === undefined) { var parent = Object.getPrototypeOf(object); if (parent === null) { return undefined; } else { return get(parent, property, receiver); } } else if ("value" in desc) { return desc.value; } else { var getter = desc.get; if (getter === undefined) { return undefined; } return getter.call(receiver); } };
-
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
 
+var _get = function get(object, property, receiver) { if (object === null) object = Function.prototype; var desc = Object.getOwnPropertyDescriptor(object, property); if (desc === undefined) { var parent = Object.getPrototypeOf(object); if (parent === null) { return undefined; } else { return get(parent, property, receiver); } } else if ("value" in desc) { return desc.value; } else { var getter = desc.get; if (getter === undefined) { return undefined; } return getter.call(receiver); } };
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
 var _enums = require('../enums');
-
-var _client = require('../client');
-
-var _client2 = _interopRequireDefault(_client);
 
 var _device = require('../device');
 
@@ -22,43 +18,35 @@ var _properties = require('./properties');
 
 var _properties2 = _interopRequireDefault(_properties);
 
-var _url = require('url');
-
-var _url2 = _interopRequireDefault(_url);
-
 var _string = require('../utils/string');
 
-var _assign = require('lodash/object/assign');
+var _assign = require('lodash/assign');
 
 var _assign2 = _interopRequireDefault(_assign);
 
-var _result = require('lodash/object/result');
+var _result = require('lodash/result');
 
 var _result2 = _interopRequireDefault(_result);
 
-var _clone = require('lodash/lang/clone');
+var _clone = require('lodash/clone');
 
 var _clone2 = _interopRequireDefault(_clone);
 
-var _forEach = require('lodash/collection/forEach');
+var _forEach = require('lodash/forEach');
 
 var _forEach2 = _interopRequireDefault(_forEach);
 
-var _isString = require('lodash/lang/isString');
+var _isString = require('lodash/isString');
 
 var _isString2 = _interopRequireDefault(_isString);
 
-var _isPlainObject = require('lodash/lang/isPlainObject');
+var _isPlainObject = require('lodash/isPlainObject');
 
 var _isPlainObject2 = _interopRequireDefault(_isPlainObject);
 
-var _isFunction = require('lodash/lang/isFunction');
+var _isFunction = require('lodash/isFunction');
 
 var _isFunction2 = _interopRequireDefault(_isFunction);
-
-var _qs = require('qs');
-
-var _qs2 = _interopRequireDefault(_qs);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -67,6 +55,10 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+/**
+ * @private
+ */
 
 var Request = function () {
   function Request() {
@@ -79,23 +71,17 @@ var Request = function () {
       headers: {
         Accept: 'application/json; charset=utf-8'
       },
-      protocol: process.env.KINVEY_API_PROTOCOL || 'https:',
-      host: process.env.KINVEY_API_HOST || 'baas.kinvey.com',
-      pathname: '/',
-      flags: {
-        _: Math.random().toString(36).substr(2)
-      },
+      url: null,
       data: null,
-      timeout: process.env.KINVEY_DEFAULT_TIMEOUT || 10000
+      timeout: process.env.KINVEY_DEFAULT_TIMEOUT || 10000,
+      followRedirect: true
     }, options);
 
     this.method = options.method;
-    this.protocol = options.protocol;
-    this.host = options.host;
-    this.pathname = options.pathname;
-    this.flags = _qs2.default.parse(options.flags);
+    this.url = options.url;
     this.data = options.data || options.body;
     this.timeout = options.timeout;
+    this.followRedirect = options.followRedirect;
     this.executing = false;
 
     var headers = options.headers && (0, _isPlainObject2.default)(options.headers) ? options.headers : {};
@@ -215,9 +201,8 @@ var Request = function () {
         method: this.method,
         headers: this.headers,
         url: this.url,
-        pathname: this.pathname,
-        flags: this.flags,
-        data: this.data
+        data: this.data,
+        followRedirect: this.followRedirect
       };
 
       return (0, _clone2.default)(json, true);
@@ -245,15 +230,6 @@ var Request = function () {
         default:
           throw new Error('Invalid Http Method. Only GET, POST, PATCH, PUT, and DELETE are allowed.');
       }
-    }
-  }, {
-    key: 'url',
-    get: function get() {
-      return _url2.default.format({
-        protocol: this.protocol,
-        host: this.host,
-        pathname: this.pathname
-      });
     }
   }, {
     key: 'body',
@@ -285,6 +261,11 @@ var Request = function () {
   return Request;
 }();
 
+/**
+ * @private
+ */
+
+
 var KinveyRequest = function (_Request) {
   _inherits(KinveyRequest, _Request);
 
@@ -296,20 +277,14 @@ var KinveyRequest = function (_Request) {
     var _this3 = _possibleConstructorReturn(this, Object.getPrototypeOf(KinveyRequest).call(this, options));
 
     options = (0, _assign2.default)({
-      client: _client2.default.sharedInstance(),
       properties: null,
       auth: null,
       query: null
     }, options);
 
-    if (!(options.client instanceof _client2.default)) {
-      options.client = new _client2.default((0, _result2.default)(options.client, 'toJSON', options.client));
-    }
-
     _this3.properties = options.properties;
-    _this3.client = options.client;
     _this3.auth = options.auth;
-    _this3.query = options.query;
+    _this3.query = (0, _result2.default)(options.query, 'toJSON', options.query);
 
     var headers = {};
     headers['X-Kinvey-Api-Version'] = process.env.KINVEY_API_VERSION || 3;
@@ -359,7 +334,7 @@ var KinveyRequest = function (_Request) {
     key: 'toJSON',
     value: function toJSON() {
       var json = _get(Object.getPrototypeOf(KinveyRequest.prototype), 'toJSON', this).call(this);
-      json.query = (0, _result2.default)(this.query, 'toJSON', this.query);
+      json.query = this.query;
       return (0, _clone2.default)(json, true);
     }
   }, {
@@ -390,19 +365,6 @@ var KinveyRequest = function (_Request) {
 
         this.setHeader('X-Kinvey-Custom-Request-Properties', customPropertiesHeader);
       }
-    }
-  }, {
-    key: 'client',
-    get: function get() {
-      return this._client;
-    },
-    set: function set(client) {
-      if (client) {
-        this.protocol = client.protocol;
-        this.host = client.host;
-      }
-
-      this._client = client;
     }
   }]);
 

@@ -8,9 +8,9 @@ var _networkRequest = require('./requests/networkRequest');
 
 var _networkRequest2 = _interopRequireDefault(_networkRequest);
 
-var _datastore = require('./stores/datastore');
+var _syncStore = require('./stores/syncStore');
 
-var _datastore2 = _interopRequireDefault(_datastore);
+var _syncStore2 = _interopRequireDefault(_syncStore);
 
 var _enums = require('./enums');
 
@@ -34,7 +34,7 @@ var _device = require('./device');
 
 var _device2 = _interopRequireDefault(_device);
 
-var _assign = require('lodash/object/assign');
+var _assign = require('lodash/assign');
 
 var _assign2 = _interopRequireDefault(_assign);
 
@@ -192,10 +192,9 @@ var Push = {
         var client = _client2.default.sharedInstance();
         var request = new _networkRequest2.default({
           method: _enums.HttpMethod.POST,
-          client: client,
+          url: client.getUrl('/' + pushNamespace + '/' + client.appKey + '/register-device'),
           properties: options.properties,
           auth: user ? _auth2.default.session : _auth2.default.master,
-          pathname: '/' + pushNamespace + '/' + client.appKey + '/register-device',
           data: {
             platform: device.platform.name,
             framework: device.isCordova() ? 'phonegap' : 'titanium',
@@ -206,7 +205,7 @@ var Push = {
         });
         return request.execute();
       }).then(function (result) {
-        var store = _datastore2.default.getInstance(deviceCollection, _enums.DataStoreType.Sync);
+        var store = new _syncStore2.default(deviceCollection);
         return store.save({
           _id: deviceId,
           registered: true
@@ -236,7 +235,7 @@ var Push = {
       return Promise.reject(new _errors.KinveyError('Kinvey currently does not support \' +\n        \'push notifications on ' + platform.name + '.'));
     }
 
-    var store = _datastore2.default.getInstance(deviceCollection, _enums.DataStoreType.Sync);
+    var store = new _syncStore2.default(deviceCollection);
     var query = new _query2.default();
     query.equalsTo('registered', true);
     var promise = store.find(query).then(function (data) {

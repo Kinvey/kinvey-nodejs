@@ -1,20 +1,23 @@
 'use strict';
 
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+exports.KinveyMiddleware = exports.Middleware = undefined;
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 var _asciiTree = require('./asciiTree');
-
-var _asciiTree2 = _interopRequireDefault(_asciiTree);
 
 var _urlPattern = require('url-pattern');
 
 var _urlPattern2 = _interopRequireDefault(_urlPattern);
 
 var _errors = require('../errors');
+
+var _url = require('url');
+
+var _url2 = _interopRequireDefault(_url);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -24,7 +27,11 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-var Middleware = function () {
+/**
+ * @private
+ */
+
+var Middleware = exports.Middleware = function () {
   function Middleware() {
     var name = arguments.length <= 0 || arguments[0] === undefined ? 'Middleware' : arguments[0];
 
@@ -56,14 +63,19 @@ var Middleware = function () {
     key: 'toString',
     value: function toString() {
       var root = this.generateTree();
-      return _asciiTree2.default.generate(root);
+      return _asciiTree.AsciiTree.generate(root);
     }
   }]);
 
   return Middleware;
 }();
 
-var KinveyMiddleware = function (_Middleware) {
+/**
+ * @private
+ */
+
+
+var KinveyMiddleware = exports.KinveyMiddleware = function (_Middleware) {
   _inherits(KinveyMiddleware, _Middleware);
 
   function KinveyMiddleware() {
@@ -79,9 +91,15 @@ var KinveyMiddleware = function (_Middleware) {
     value: function handle(request) {
       return new Promise(function (resolve, reject) {
         if (request) {
-          var pattern = new _urlPattern2.default('/:namespace/:appId(/)(:collection)(/)(:id)(/)');
-          var matches = pattern.match(request.pathname);
-          return resolve(matches);
+          var pathname = _url2.default.parse(request.url).pathname;
+          var pattern = new _urlPattern2.default('(/:namespace)(/)(:appKey)(/)(:collection)(/)(:id)(/)');
+          var matches = pattern.match(pathname) || {};
+          return resolve({
+            namespace: matches.namespace,
+            appKey: matches.appKey,
+            collection: matches.collection,
+            id: matches.id
+          });
         }
 
         reject(new _errors.KinveyError('Request is null. Please provide a valid request.', request));
@@ -91,5 +109,3 @@ var KinveyMiddleware = function (_Middleware) {
 
   return KinveyMiddleware;
 }(Middleware);
-
-exports.default = KinveyMiddleware;

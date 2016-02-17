@@ -4,6 +4,9 @@ Object.defineProperty(exports, "__esModule", {
   value: true
 });
 exports.byteCount = byteCount;
+/**
+ * @private
+ */
 function byteCount(str) {
   var count = 0;
   var stringLength = str.length;

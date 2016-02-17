@@ -1,10 +1,10 @@
 'use strict';
 
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 var _errors = require('../errors');
 
@@ -12,9 +12,9 @@ var _model = require('./model');
 
 var _model2 = _interopRequireDefault(_model);
 
-var _client = require('../client');
+var _device = require('../device');
 
-var _client2 = _interopRequireDefault(_client);
+var _device2 = _interopRequireDefault(_device);
 
 var _networkRequest = require('../requests/networkRequest');
 
@@ -38,19 +38,15 @@ var _mic = require('../mic');
 
 var _mic2 = _interopRequireDefault(_mic);
 
-var _hellojs = require('hellojs');
-
-var _hellojs2 = _interopRequireDefault(_hellojs);
-
-var _isObject = require('lodash/lang/isObject');
+var _isObject = require('lodash/isObject');
 
 var _isObject2 = _interopRequireDefault(_isObject);
 
-var _result = require('lodash/object/result');
+var _result = require('lodash/result');
 
 var _result2 = _interopRequireDefault(_result);
 
-var _assign = require('lodash/object/assign');
+var _assign = require('lodash/assign');
 
 var _assign2 = _interopRequireDefault(_assign);
 
@@ -66,6 +62,11 @@ var appdataNamespace = process.env.KINVEY_DATASTORE_NAMESPACE || 'appdata';
 var usersNamespace = process.env.KINVEY_USERS_NAMESPACE || 'user';
 var rpcNamespace = process.env.KINVEY_RPC_NAMESPACE || 'rpc';
 var micAuthProvider = process.env.KINVEY_MIC_AUTH_PROVIDER || 'kinveyAuth';
+var hello = undefined;
+
+if (typeof window !== 'undefined') {
+  hello = require('hellojs');
+}
 
 var User = function (_Model) {
   _inherits(User, _Model);
@@ -77,25 +78,18 @@ var User = function (_Model) {
   }
 
   _createClass(User, [{
-    key: 'getPathname',
-    value: function getPathname(client) {
-      client = client || this.client;
-      return '/' + usersNamespace + '/' + client.appKey;
-    }
-  }, {
-    key: 'getRpcPathname',
-    value: function getRpcPathname(client) {
-      client = client || this.client;
-      return '/' + rpcNamespace + '/' + client.appKey;
-    }
-  }, {
     key: 'isActive',
+
+
+    /**
+     * Checks if the user is active.
+     *
+     * @returns {Promise} Resolved with `true` if the user is active, `false` otherwise.
+     */
     value: function isActive() {
       var _this2 = this;
 
-      var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
-
-      return User.getActive(options).then(function (user) {
+      return User.getActive(this.client).then(function (user) {
         if (user) {
           return _this2.id === user.id;
         }
@@ -103,6 +97,24 @@ var User = function (_Model) {
         return false;
       });
     }
+
+    /**
+     * Login a user. A promise will be returned that will be resolved with a
+     * user or rejected with an error.
+     *
+     * @param   {string|Object} usernameOrData Username or login data
+     * @param   {string} [password] Password
+     * @param   {Options} [options] Options
+     * @return  {Promise} Promise
+     *
+     * @example
+     * Kinvey.User.login('admin', 'admin').then(function(user) {
+     *   ...
+     * }).catch(function(err) {
+     *   ...
+     * });
+     */
+
   }, {
     key: 'login',
     value: function login() {
@@ -110,11 +122,7 @@ var User = function (_Model) {
 
       var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
 
-      options = (0, _assign2.default)({
-        client: this.client
-      }, options);
-
-      var promise = User.getActive(options).then(function (activeUser) {
+      var promise = User.getActive(this.client).then(function (activeUser) {
         if (activeUser) {
           throw new _errors.ActiveUserError('A user is already logged in.');
         }
@@ -128,10 +136,9 @@ var User = function (_Model) {
 
         var request = new _networkRequest2.default({
           method: _enums.HttpMethod.POST,
-          pathname: _this3.getPathname(_this3.client) + '/login',
+          url: _this3.client.getUrl(_this3._pathname + '/login'),
           data: _this3.toJSON(),
-          auth: _auth2.default.app,
-          client: options.client
+          auth: _auth2.default.app
         });
         return request.execute();
       }).then(function (response) {
@@ -188,9 +195,13 @@ var User = function (_Model) {
 
       var options = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
 
+      var device = new _device2.default();
+
+      if (device.isNode()) {
+        return Promise.reject(new _errors.KinveyError('Unable to connect to social identity ' + identity + ' on this platform.'));
+      }
+
       options = (0, _assign2.default)({
-        client: _client2.default.sharedInstance(),
-        auth: _auth2.default.default,
         collectionName: 'SocialIdentities',
         handler: function handler() {}
       }, options);
@@ -200,10 +211,9 @@ var User = function (_Model) {
         query.equalTo('identity', identity);
         var request = new _networkRequest2.default({
           method: _enums.HttpMethod.GET,
-          client: options.client,
+          url: _this5.client.getUrl('/' + appdataNamespace + '/' + _this5.client.appKey + '/' + options.collectionName),
           properties: options.properties,
-          auth: options.auth,
-          pathname: '/' + appdataNamespace + '/' + options.client.appKey + '/' + options.collectionName,
+          auth: _auth2.default.default,
           query: query,
           timeout: options.timeout
         });
@@ -213,8 +223,8 @@ var User = function (_Model) {
           if (response.data.length === 1) {
             var helloSettings = {};
             helloSettings[identity] = response.data[0].key || response.data[0].appId || response.data[0].clientId;
-            _hellojs2.default.init(helloSettings);
-            return (0, _hellojs2.default)(identity).login();
+            hello.init(helloSettings);
+            return hello(identity).login();
           }
 
           throw new Error('Unsupported social identity');
@@ -222,7 +232,7 @@ var User = function (_Model) {
 
         throw response.error;
       }).then(function () {
-        var authResponse = (0, _hellojs2.default)(identity).getAuthResponse();
+        var authResponse = hello(identity).getAuthResponse();
         return _this5.connect(authResponse.access_token, authResponse.expires_in, identity, options);
       });
 
@@ -260,6 +270,23 @@ var User = function (_Model) {
 
       return promise;
     }
+
+    /**
+     * Logout the active user. A promise will be returned that will be resolved
+     * with null or rejected with an error.
+     *
+     * @param {Object} [options] Options
+     * @return  {Promise} Promise
+     *
+     * @example
+     * var user = Kinvey.User.getActive();
+     * user.logout().then(function() {
+     *   ...
+     * }).catch(function(err) {
+     *   ...
+     * });
+     */
+
   }, {
     key: 'logout',
     value: function logout() {
@@ -268,7 +295,6 @@ var User = function (_Model) {
       var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
 
       options = (0, _assign2.default)({
-        client: this.client,
         properties: null,
         timeout: undefined,
         handler: function handler() {}
@@ -281,14 +307,12 @@ var User = function (_Model) {
 
         var request = new _networkRequest2.default({
           method: _enums.HttpMethod.POST,
-          client: options.client,
+          url: _this7.client.getUrl(_this7._pathname + '/_logout'),
           properties: options.properties,
           auth: _auth2.default.session,
-          pathname: _this7.getPathname(options.client) + '/_logout',
           timeout: options.timeout
         });
-        return request.execute();
-      }).then(function () {
+        request.execute();
         return User.setActive(null, options.client);
       });
 
@@ -302,7 +326,6 @@ var User = function (_Model) {
       var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
 
       options = (0, _assign2.default)({
-        client: this.client,
         properties: null,
         timeout: undefined,
         handler: function handler() {}
@@ -310,10 +333,9 @@ var User = function (_Model) {
 
       var request = new _networkRequest2.default({
         method: _enums.HttpMethod.POST,
-        client: options.client,
+        url: this.client.getUrl(this._pathname),
         properties: options.properties,
         auth: _auth2.default.app,
-        pathname: this.getPathname(this.client),
         data: this.toJSON(),
         timeout: options.timeout
       });
@@ -336,18 +358,41 @@ var User = function (_Model) {
       var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
 
       options = (0, _assign2.default)({
-        client: this.client,
         properties: null,
         timeout: undefined,
         handler: function handler() {}
       }, options);
 
+      // const socialIdentity = this.get('_socialIdentity');
+      // const tokens = [];
+
+      // jscs:disable requireCamelCaseOrUpperCaseIdentifiers
+
+      // if (socialIdentity) {
+      //   for (const identity of socialIdentity) {
+      //     if (socialIdentity.hasOwnProperty(identity)) {
+      //       if (socialIdentity[identity] && identity !== options._provider) {
+      //         tokens.push({
+      //           provider: identity,
+      //           access_token: socialIdentity[identity].access_token,
+      //           access_token_secret: socialIdentity[identity].access_token_secret
+      //         });
+      //         delete socialIdentity[identity].access_token;
+      //         delete socialIdentity[identity].access_token_secret;
+      //       }
+      //     }
+      //   }
+      // }
+
+      // jscs:enable requireCamelCaseOrUpperCaseIdentifiers
+
+      // user.set('_socialIdentity', socialIdentity);
+
       var request = new _networkRequest2.default({
         method: _enums.HttpMethod.PUT,
-        client: options.client,
+        url: this.client.getUrl(this._pathname + '/' + this.id),
         properties: options.properties,
         auth: _auth2.default.session,
-        pathname: this.getPathname(this.client) + '/' + this.id,
         data: this.toJSON(),
         timeout: options.timeout
       });
@@ -374,10 +419,6 @@ var User = function (_Model) {
 
       var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
 
-      options = (0, _assign2.default)({
-        client: this.client
-      }, options);
-
       var promise = this.isActive(options).then(function (active) {
         if (!active) {
           throw new _errors.KinveyError('User is not active. Please login first.');
@@ -385,10 +426,9 @@ var User = function (_Model) {
 
         var request = new _networkRequest2.default({
           method: _enums.HttpMethod.GET,
-          pathname: _this10.getPathname(options.client) + '/_me',
+          url: _this10.client.getUrl(_this10._pathname + '/_me'),
           dataPolicy: _enums.ReadPolicy.NetworkOnly,
-          auth: _auth2.default.session,
-          client: options.client
+          auth: _auth2.default.session
         });
         return request.execute();
       }).then(function (response) {
@@ -413,18 +453,11 @@ var User = function (_Model) {
   }, {
     key: 'verifyEmail',
     value: function verifyEmail() {
-      var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
-
-      options = (0, _assign2.default)({
-        client: this.client
-      }, options);
-
       var request = new _networkRequest2.default({
         method: _enums.HttpMethod.POST,
-        pathname: this.getRpcPathname(options.client) + '/' + this.get('username') + '/user-email-verification-initiate',
+        url: this.client.getUrl(this._rpcPathname + '/' + this.get('username') + '/user-email-verification-initiate'),
         writePolicy: _enums.WritePolicy.Network,
-        auth: _auth2.default.app,
-        client: options.client
+        auth: _auth2.default.app
       });
       var promise = request.execute();
       return promise;
@@ -432,18 +465,11 @@ var User = function (_Model) {
   }, {
     key: 'forgotUsername',
     value: function forgotUsername() {
-      var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
-
-      options = (0, _assign2.default)({
-        client: this.client
-      }, options);
-
       var request = new _networkRequest2.default({
         method: _enums.HttpMethod.POST,
-        pathname: this.getRpcPathname(options.client) + '/user-forgot-username',
+        url: this.client.getUrl(this._rpcPathname + '/user-forgot-username'),
         writePolicy: _enums.WritePolicy.Network,
         auth: _auth2.default.app,
-        client: options.client,
         data: { email: this.get('email') }
       });
       var promise = request.execute();
@@ -452,33 +478,61 @@ var User = function (_Model) {
   }, {
     key: 'resetPassword',
     value: function resetPassword() {
-      var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
-
-      options = (0, _assign2.default)({
-        client: this.client
-      }, options);
-
       var request = new _networkRequest2.default({
         method: _enums.HttpMethod.POST,
-        pathname: this.getRpcPathname(options.client) + '/' + this.get('username') + '/user-password-reset-initiate',
+        url: this.client.getUrl(this._rpcPathname + '/' + this.get('username') + '/user-password-reset-initiate'),
         writePolicy: _enums.WritePolicy.Network,
-        auth: _auth2.default.app,
-        client: options.client
+        auth: _auth2.default.app
       });
       var promise = request.execute();
       return promise;
     }
   }, {
+    key: '_pathname',
+
+    /**
+     * The pathname for the users where requests will be sent.
+     *
+     * @return   {string}    Pathname
+     */
+    get: function get() {
+      return '/' + usersNamespace + '/' + this.client.appKey;
+    }
+
+    /**
+     * The pathname for the rpc where requests will be sent.
+     *
+     * @return   {string}    Pathname
+     */
+
+  }, {
+    key: '_rpcPathname',
+    get: function get() {
+      return '/' + rpcNamespace + '/' + this.client.appKey;
+    }
+
+    /**
+     * Authtoken
+     *
+     * @return {string} Authtoken
+     */
+
+  }, {
     key: 'authtoken',
     get: function get() {
       return this.metadata.authtoken;
     }
+
+    /**
+     * Active user that is logged in.
+     *
+     * @return {Promise} Resolved with the active user if one exists, null otherwise.
+     */
+
   }], [{
     key: 'getActive',
     value: function getActive() {
-      var options = arguments.length <= 0 || arguments[0] === undefined ? {} : arguments[0];
-
-      var promise = _user2.default.getActive(options).then(function (data) {
+      var promise = _user2.default.getActive(this.client).then(function (data) {
         if (data) {
           return new User(data);
         }
@@ -488,16 +542,21 @@ var User = function (_Model) {
 
       return promise;
     }
+
+    /**
+     * Stores the active user that is logged in.
+     *
+     * @return {Promise} Resolved with the active user if one exists, null otherwise.
+     */
+
   }, {
     key: 'setActive',
     value: function setActive(user) {
-      var options = arguments.length <= 1 || arguments[1] === undefined ? {} : arguments[1];
-
       if (user && !(user instanceof User)) {
         user = new User((0, _result2.default)(user, 'toJSON', user));
       }
 
-      var promise = _user2.default.setActive(user, options).then(function (data) {
+      var promise = _user2.default.setActive(user, this.client).then(function (data) {
         if (data) {
           return new User(data);
         }

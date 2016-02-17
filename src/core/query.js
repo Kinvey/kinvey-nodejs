@@ -1,12 +1,12 @@
 'use strict';
 
-var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
-
-var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
-
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
+
+var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol ? "symbol" : typeof obj; };
+
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 var _object = require('./utils/object');
 
@@ -14,31 +14,31 @@ var _sift = require('sift');
 
 var _sift2 = _interopRequireDefault(_sift);
 
-var _clone = require('lodash/lang/clone');
+var _clone = require('lodash/clone');
 
 var _clone2 = _interopRequireDefault(_clone);
 
-var _assign = require('lodash/object/assign');
+var _assign = require('lodash/assign');
 
 var _assign2 = _interopRequireDefault(_assign);
 
-var _isArray = require('lodash/lang/isArray');
+var _isArray = require('lodash/isArray');
 
 var _isArray2 = _interopRequireDefault(_isArray);
 
-var _isNumber = require('lodash/lang/isNumber');
+var _isNumber = require('lodash/isNumber');
 
 var _isNumber2 = _interopRequireDefault(_isNumber);
 
-var _isString = require('lodash/lang/isString');
+var _isString = require('lodash/isString');
 
 var _isString2 = _interopRequireDefault(_isString);
 
-var _isObject = require('lodash/lang/isObject');
+var _isObject = require('lodash/isObject');
 
 var _isObject2 = _interopRequireDefault(_isObject);
 
-var _isRegExp = require('lodash/lang/isRegExp');
+var _isRegExp = require('lodash/isRegExp');
 
 var _isRegExp2 = _interopRequireDefault(_isRegExp);
 
@@ -60,18 +60,60 @@ var PrivateQuery = function () {
       skip: 0
     }, options);
 
+    /**
+     * Fields to select.
+     *
+     * @type {Array}
+     */
     this._fields = options.fields;
 
+    /**
+     * The MongoDB query.
+     *
+     * @type {Object}
+     */
     this._filter = options.filter;
 
+    /**
+     * The sorting order.
+     *
+     * @type {Object}
+     */
     this._sort = options.sort;
 
+    /**
+     * Number of documents to select.
+     *
+     * @type {?Number}
+     */
     this._limit = options.limit;
 
+    /**
+     * Number of documents to skip from the start.
+     *
+     * @type {Number}
+     */
     this._skip = options.skip;
 
+    /**
+     * Maintain reference to the parent query in case the query is part of a
+     * join.
+     *
+     * @type {?PrivateQuery}
+     */
     this.parent = null;
   }
+
+  /**
+   * Adds an equal to filter to the query. Requires `field` to equal `value`.
+   * Any existing filters on `field` will be discarded.
+   * http://docs.mongodb.org/manual/reference/operators/#comparison
+   *
+   * @param   {String}        field     Field.
+   * @param   {*}             value     Value.
+   * @returns {Query}                   The query.
+   */
+
 
   _createClass(PrivateQuery, [{
     key: 'equalTo',
@@ -79,6 +121,18 @@ var PrivateQuery = function () {
       this._filter[field] = value;
       return this;
     }
+
+    /**
+     * Adds a contains filter to the query. Requires `field` to contain at least
+     * one of the members of `list`.
+     * http://docs.mongodb.org/manual/reference/operator/in/
+     *
+     * @param   {String}        field     Field.
+     * @param   {Array}         values    List of values.
+     * @throws  {Error}                   `values` must be of type: `Array`.
+     * @returns {Query}                   The query.
+     */
+
   }, {
     key: 'contains',
     value: function contains(field, values) {
@@ -88,6 +142,18 @@ var PrivateQuery = function () {
 
       return this.addFilter(field, '$in', values);
     }
+
+    /**
+     * Adds a contains all filter to the query. Requires `field` to contain all
+     * members of `list`.
+     * http://docs.mongodb.org/manual/reference/operator/all/
+     *
+     * @param   {String}  field     Field.
+     * @param   {Array}   values    List of values.
+     * @throws  {Error}             `values` must be of type: `Array`.
+     * @returns {Query}             The query.
+     */
+
   }, {
     key: 'containsAll',
     value: function containsAll(field, values) {
@@ -97,6 +163,18 @@ var PrivateQuery = function () {
 
       return this.addFilter(field, '$all', values);
     }
+
+    /**
+     * Adds a greater than filter to the query. Requires `field` to be greater
+     * than `value`.
+     * http://docs.mongodb.org/manual/reference/operator/gt/
+     *
+     * @param   {String}          field     Field.
+     * @param   {Number|String}   value     Value.
+     * @throws  {Error}                     `value` must be of type: `number` or `string`.
+     * @returns {Query}                     The query.
+     */
+
   }, {
     key: 'greaterThan',
     value: function greaterThan(field, value) {
@@ -397,6 +475,16 @@ var PrivateQuery = function () {
 
       return this;
     }
+
+    /**
+     * Adds a filter to the query.
+     *
+     * @param   {String}          field       Field.
+     * @param   {String}          condition   Condition.
+     * @param   {*}               value       Value.
+     * @returns {PrivateQuery}                The query.
+     */
+
   }, {
     key: 'addFilter',
     value: function addFilter(field, condition, values) {
@@ -407,12 +495,25 @@ var PrivateQuery = function () {
       this._filter[field][condition] = values;
       return this;
     }
+
+    /**
+     * Joins the current query with another query using an operator.
+     *
+     * @param   {String}                    operator    Operator.
+     * @param   {PrivateQuery[]|Object[]}   queries     Queries.
+     * @throws  {Error}                                `query` must be of type: `Kinvey.Query[]` or `Object[]`.
+     * @returns {PrivateQuery}                          The query.
+     */
+
   }, {
     key: 'join',
     value: function join(operator, queries) {
       var _this = this;
       var currentQuery = {};
 
+      // Cast, validate, and parse arguments. If `queries` are supplied, obtain
+      // the `filter` for joining. The eventual return function will be the
+      // current query.
       queries = queries.map(function (query) {
         if (!(query instanceof PrivateQuery)) {
           if ((0, _isObject2.default)(query)) {
@@ -425,12 +526,18 @@ var PrivateQuery = function () {
         return query.toJSON().filter;
       });
 
+      // If there are no `queries` supplied, create a new (empty) `Query`.
+      // This query is the right-hand side of the join expression, and will be
+      // returned to allow for a fluent interface.
       if (queries.length === 0) {
         _this = new PrivateQuery();
         queries = [_this.toJSON().filter];
-        _this.parent = this;
+        _this.parent = this; // Required for operator precedence and `toJSON`.
       }
 
+      // Join operators operate on the top-level of `filter`. Since the `toJSON`
+      // magic requires `filter` to be passed by reference, we cannot simply re-
+      // assign `filter`. Instead, empty it without losing the reference.
       for (var member in this._filter) {
         if (this._filter.hasOwnProperty(member)) {
           currentQuery[member] = this._filter[member];
@@ -438,10 +545,22 @@ var PrivateQuery = function () {
         }
       }
 
+      // `currentQuery` is the left-hand side query. Join with `queries`.
       this._filter[operator] = [currentQuery].concat(queries);
 
+      // Return the current query if there are `queries`, and the new (empty)
+      // `PrivateQuery` otherwise.
       return _this;
     }
+
+    /**
+     * Processes the data by applying fields, sort, limit, and skip.
+     *
+     * @param   {Array}   data    The raw data.
+     * @throws  {Error}               `data` must be of type: `Array`.
+     * @returns {Array}               The processed data.
+     */
+
   }, {
     key: '_process',
     value: function _process(data) {
@@ -449,13 +568,16 @@ var PrivateQuery = function () {
 
       if (data) {
         var _ret = function () {
+          // Validate arguments.
           if (!(0, _isArray2.default)(data)) {
             throw new Error('data argument must be of type: Array.');
           }
 
+          // Apply the query
           var json = _this2.toJSON();
           data = (0, _sift2.default)(json.filter, data);
 
+          // Remove fields
           if (json.fields && json.fields.length > 0) {
             data = data.map(function (item) {
               for (var key in item) {
@@ -468,12 +590,16 @@ var PrivateQuery = function () {
             });
           }
 
+          // Sorting.
           data = data.sort(function (a, b) {
             for (var field in json.sort) {
               if (json.sort.hasOwnProperty(field)) {
+                // Find field in objects.
                 var aField = (0, _object.nested)(a, field);
                 var bField = (0, _object.nested)(b, field);
 
+                // Elements which do not contain the field should always be sorted
+                // lower.
                 if (aField && !bField) {
                   return -1;
                 }
@@ -482,8 +608,11 @@ var PrivateQuery = function () {
                   return 1;
                 }
 
+                // Sort on the current field. The modifier adjusts the sorting order
+                // (ascending (-1), or descending(1)). If the fields are equal,
+                // continue sorting based on the next field (if any).
                 if (aField !== bField) {
-                  var modifier = json.sort[field];
+                  var modifier = json.sort[field]; // 1 or -1.
                   return (aField < bField ? -1 : 1) * modifier;
                 }
               }
@@ -492,6 +621,7 @@ var PrivateQuery = function () {
             return 0;
           });
 
+          // Limit and skip.
           if (json.limit) {
             return {
               v: data.slice(json.skip, json.skip + json.limit)
@@ -508,6 +638,13 @@ var PrivateQuery = function () {
 
       return data;
     }
+
+    /**
+     * Returns JSON representation of the query.
+     *
+     * @returns {Object} JSON object-literal.
+     */
+
   }, {
     key: 'toJSON',
     value: function toJSON() {
@@ -515,6 +652,7 @@ var PrivateQuery = function () {
         return this.parent.toJSON();
       }
 
+      // Return set of parameters.
       var json = {
         fields: this._fields,
         filter: this._filter,
@@ -537,24 +675,71 @@ var Query = function () {
     this[privateQuerySymbol] = new PrivateQuery(options);
   }
 
+  /**
+   * Adds an equal to filter to the query. Requires `field` to equal `value`.
+   * Any existing filters on `field` will be discarded.
+   * http://docs.mongodb.org/manual/reference/operators/#comparison
+   *
+   * @param   {String}        field     Field.
+   * @param   {*}             value     Value.
+   * @returns {Query}                   The query.
+   */
+
+
   _createClass(Query, [{
     key: 'equalTo',
     value: function equalTo(field, value) {
       this[privateQuerySymbol].equalTo(field, value);
       return this;
     }
+
+    /**
+     * Adds a contains filter to the query. Requires `field` to contain at least
+     * one of the members of `list`.
+     * http://docs.mongodb.org/manual/reference/operator/in/
+     *
+     * @param   {String}        field     Field.
+     * @param   {Array}         values    List of values.
+     * @throws  {Error}                   `values` must be of type: `Array`.
+     * @returns {Query}                   The query.
+     */
+
   }, {
     key: 'contains',
     value: function contains(field, values) {
       this[privateQuerySymbol].contains(field, values);
       return this;
     }
+
+    /**
+     * Adds a contains all filter to the query. Requires `field` to contain all
+     * members of `list`.
+     * http://docs.mongodb.org/manual/reference/operator/all/
+     *
+     * @param   {String}  field     Field.
+     * @param   {Array}   values    List of values.
+     * @throws  {Error}             `values` must be of type: `Array`.
+     * @returns {Query}             The query.
+     */
+
   }, {
     key: 'containsAll',
     value: function containsAll(field, values) {
       this[privateQuerySymbol].containsAll(field, values);
       return this;
     }
+
+    /**
+     * Adds a greater than filter to the query. Requires `field` to be greater
+     * than `value`.
+     * http://docs.mongodb.org/manual/reference/operator/gt/
+     *
+     * @param   {String}          field     Field.
+     * @param   {Number|String}   value     Value.
+     * @throws  {Error}                     `value` must be of type: `number` or `string`.
+     * @returns {Query}                     The query.
+     */
+
   }, {
     key: 'greaterThan',
     value: function greaterThan(field, value) {
@@ -692,6 +877,13 @@ var Query = function () {
     value: function _process(data) {
       return this[privateQuerySymbol]._process(data);
     }
+
+    /**
+     * Returns JSON representation of the query.
+     *
+     * @returns {Object} JSON object-literal.
+     */
+
   }, {
     key: 'toJSON',
     value: function toJSON() {
