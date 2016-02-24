@@ -14,7 +14,7 @@
     }
   ],
   "author": "Kinvey, Inc.",
-  "main": "./src/kinvey.js",
+  "main": "./src/index.js",
   "contributors": [
     "Thomas Conner <thomas@kinvey.com>"
   ],
