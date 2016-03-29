@@ -1,6 +1,7 @@
 node_modules
 .env
 .tmp
+.babelrc
 tmp
 .DS_Store
 coverage
@@ -9,6 +10,7 @@ npm-debug.log
 report.xml
 docs
 sample
+sandbox
 
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio and Webstorm
 *.iml
