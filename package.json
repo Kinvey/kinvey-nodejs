@@ -1,6 +1,6 @@
 {
   "name": "kinvey-node-sdk",
-  "version": "3.0.0-beta.12",
+  "version": "3.0.0-beta.14",
   "description": "Kinvey JavaScript SDK for NodeJS applications.",
   "homepage": "http://www.kinvey.com",
   "bugs": {
@@ -24,7 +24,7 @@
   },
   "scripts": {},
   "dependencies": {
-    "kinvey-javascript-sdk-core": "3.0.0-beta.12",
+    "kinvey-javascript-sdk-core": "3.0.0-beta.14",
     "lodash": "^4.3.0",
     "request": "^2.69.0"
   },
