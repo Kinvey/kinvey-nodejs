@@ -9,7 +9,7 @@ var _createClass = function () { function defineProperties(target, props) { for 
 
 var _get = function get(object, property, receiver) { if (object === null) object = Function.prototype; var desc = Object.getOwnPropertyDescriptor(object, property); if (desc === undefined) { var parent = Object.getPrototypeOf(object); if (parent === null) { return undefined; } else { return get(parent, property, receiver); } } else if ("value" in desc) { return desc.value; } else { var getter = desc.get; if (getter === undefined) { return undefined; } return getter.call(receiver); } };
 
-var _middleware = require('kinvey-javascript-sdk-core/src/rack/middleware');
+var _middleware = require('kinvey-javascript-sdk-core/build/rack/middleware');
 
 var _request = require('request');
 
@@ -70,4 +70,3 @@ var HttpMiddleware = exports.HttpMiddleware = function (_KinveyMiddleware) {
 
   return HttpMiddleware;
 }(_middleware.KinveyMiddleware);
-//# sourceMappingURL=http.js.map

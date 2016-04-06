@@ -51,4 +51,3 @@ var DeviceAdapter = exports.DeviceAdapter = function () {
 
   return DeviceAdapter;
 }();
-//# sourceMappingURL=device.js.map
