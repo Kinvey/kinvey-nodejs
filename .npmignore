@@ -4,12 +4,26 @@ node_modules
 tmp
 .DS_Store
 coverage
-tmp
 npm-debug.log
 report.xml
 docs
-sample
-test.tap
+sandbox
+*.tap
+test
+manual
+.babelrc
+.editorconfig
+.eslintrc
+.gitattributes
+.gitignore
+.nvmrc
+esdoc.json
+gulpfile.babel.js
+hints.md
+Makefile
+README.md
+src
+.npm_cache
 
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio and Webstorm
 *.iml
