@@ -14,19 +14,22 @@
     }
   ],
   "author": "Kinvey, Inc.",
-  "main": "./build/index.js",
+  "main": "./dist/index.js",
   "contributors": [
     "Thomas Conner <thomas@kinvey.com>"
   ],
   "repository": {
     "type": "git",
-    "url": "git@github.com:Kinvey/kinvey-node-sdk"
+    "url": "git@github.com:Kinvey/node-sdk"
   },
   "scripts": {},
   "dependencies": {
-    "kinvey-javascript-sdk-core": "git://github.com/Kinvey/javascript-sdk-core.git#develop",
+    "kinvey-javascript-sdk-core": "*",
     "lodash": "^4.3.0",
     "request": "^2.69.0"
+  },
+  "peerDependencies": {
+    "kinvey-javascript-sdk-core": "*"
   },
   "devDependencies": {
     "babel-eslint": "^6.0.2",

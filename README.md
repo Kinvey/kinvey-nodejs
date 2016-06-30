@@ -33,7 +33,6 @@ Kinvey.init({
 });
 ```
 
-
 ### 4. Verify Set Up
 You can use the following snippet to verify the app credentials were entered correctly. This function will contact the backend and verify that the library can communicate with your app.
 

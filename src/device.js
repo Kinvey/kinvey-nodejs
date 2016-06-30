@@ -7,18 +7,16 @@ import os from 'os';
 export class DeviceAdapter {
   toJSON() {
     return {
-      environment: 'node',
-      sdk: {
-        name: packageJSON.name,
-        version: packageJSON.version
+      platform: {
+        name: 'node'
       },
       os: {
         name: os.platform(),
         version: os.release()
       },
-      process: {
-        name: process.title,
-        versions: process.version
+      kinveySDK: {
+        name: packageJSON.name,
+        version: packageJSON.version
       }
     };
   }

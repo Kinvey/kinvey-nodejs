@@ -1,16 +1,15 @@
 import { Kinvey } from 'kinvey-javascript-sdk-core';
-import { NetworkRack } from 'kinvey-javascript-sdk-core/build/rack/rack';
-import { SerializeMiddleware } from 'kinvey-javascript-sdk-core/build/rack/middleware/serialize';
+import { KinveyRackManager } from 'kinvey-javascript-sdk-core/dist/rack/rack';
+import { HttpMiddleware as CoreHttpMiddleware } from 'kinvey-javascript-sdk-core/dist/rack/http';
 import { HttpMiddleware } from './http';
-import { Device } from 'kinvey-javascript-sdk-core/build/utils/device';
-import { DeviceAdapter } from './device';
+import { Device } from './device';
 
-// Add Http middleware
-const networkRack = NetworkRack.sharedInstance();
-networkRack.useAfter(SerializeMiddleware, new HttpMiddleware());
+// Swap Http middleware
+const networkRack = KinveyRackManager.networkRack;
+networkRack.swap(CoreHttpMiddleware, new HttpMiddleware());
 
-// Use Device Adapter
-Device.use(new DeviceAdapter());
+// Expose some globals
+global.KinveyDevice = Device;
 
 // Export
 module.exports = Kinvey;
