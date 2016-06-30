@@ -1,4 +1,4 @@
-import { KinveyMiddleware } from 'kinvey-javascript-sdk-core/build/rack/middleware';
+import { KinveyMiddleware } from 'kinvey-javascript-sdk-core/dist/rack/middleware';
 import http from 'request';
 
 export class HttpMiddleware extends KinveyMiddleware {
@@ -9,12 +9,14 @@ export class HttpMiddleware extends KinveyMiddleware {
   handle(request) {
     return super.handle(request).then(() => {
       const promise = new Promise((resolve, reject) => {
+        const { url, method, headers, body, followRedirect } = request;
+
         http({
-          url: request.url,
-          method: request.method,
-          headers: request.headers,
-          body: request.data,
-          followRedirect: request.followRedirect
+          url: url,
+          method: method,
+          headers: headers.toJSON(),
+          body: body,
+          followRedirect: followRedirect
         }, (error, response, body) => {
           if (error) {
             if (error.code === 'ENOTFOUND') {

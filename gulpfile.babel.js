@@ -52,4 +52,4 @@ gulp.task('tag', () => {
   return stream;
 });
 
-gulp.task('default', ['bundle']);
+gulp.task('default', ['build']);
