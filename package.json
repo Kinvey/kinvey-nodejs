@@ -28,7 +28,7 @@
     "test:jenkins": "istanbul cover _mocha -- --reporter tap --compilers js:babel-core/register -r babel-polyfill -s 100 --recursive test > test.tap && istanbul report clover"
   },
   "dependencies": {
-    "kinvey-javascript-sdk-core": "../../Core/SDK",
+    "kinvey-javascript-sdk-core": "3.0.0-beta.30",
     "lodash": "^4.3.0",
     "request": "^2.69.0"
   },
