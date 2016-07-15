@@ -52,7 +52,7 @@ var HttpMiddleware = exports.HttpMiddleware = function (_KinveyMiddleware) {
             headers: headers.toJSON(),
             body: body,
             followRedirect: followRedirect
-          }, function (error, response, body) {
+          }, function (error, response, data) {
             if (error) {
               if (error.code === 'ENOTFOUND') {
                 return reject(new Error('It looks like you do not have a network connection. ' + 'Please check that you are connected to a network and try again.'));
@@ -64,7 +64,7 @@ var HttpMiddleware = exports.HttpMiddleware = function (_KinveyMiddleware) {
             request.response = {
               statusCode: response.statusCode,
               headers: response.headers,
-              data: body
+              data: data
             };
 
             return resolve(request);

@@ -1,6 +1,6 @@
 'use strict';
 
-var _kinveyJavascriptSdkCore = require('kinvey-javascript-sdk-core');
+var _kinvey = require('./kinvey');
 
 var _rack = require('kinvey-javascript-sdk-core/dist/rack/rack');
 
@@ -18,4 +18,4 @@ networkRack.swap(_http.HttpMiddleware, new _http2.HttpMiddleware());
 global.KinveyDevice = _device.Device;
 
 // Export
-module.exports = _kinveyJavascriptSdkCore.Kinvey;
+module.exports = _kinvey.Kinvey;
