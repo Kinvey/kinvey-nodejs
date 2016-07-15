@@ -28,12 +28,9 @@
     "test:jenkins": "istanbul cover _mocha -- --reporter tap --compilers js:babel-core/register -r babel-polyfill -s 100 --recursive test > test.tap && istanbul report clover"
   },
   "dependencies": {
-    "kinvey-javascript-sdk-core": "*",
+    "kinvey-javascript-sdk-core": "../../Core/SDK",
     "lodash": "^4.3.0",
     "request": "^2.69.0"
-  },
-  "peerDependencies": {
-    "kinvey-javascript-sdk-core": "*"
   },
   "devDependencies": {
     "babel-core": "^6.10.4",
@@ -71,5 +68,45 @@
   "keywords": [
     "Kinvey",
     "NodeJS"
-  ]
+  ],
+  "babel": {
+    "presets": [
+      "es2015",
+      "stage-2"
+    ]
+  },
+  "eslintConfig": {
+    "extends": "airbnb",
+    "parser": "babel-eslint",
+    "rules": {
+      "comma-dangle": "off",
+      "func-names": "off",
+      "id-length": "off",
+      "max-len": [
+        "warn",
+        {
+          "code": 120,
+          "tabWidth": 2,
+          "ignoreComments": true,
+          "ignoreTrailingComments": true
+        }
+      ],
+      "no-console": "error",
+      "no-loop-func": "warn",
+      "no-param-reassign": "off",
+      "no-shadow": "off",
+      "no-underscore-dangle": "off",
+      "object-shorthand": [
+        "error",
+        "methods"
+      ],
+      "space-before-function-paren": "off"
+    },
+    "env": {
+      "browser": true,
+      "es6": true,
+      "mocha": true,
+      "node": true
+    }
+  }
 }

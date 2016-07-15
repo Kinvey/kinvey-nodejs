@@ -17,7 +17,7 @@ export class HttpMiddleware extends KinveyMiddleware {
           headers: headers.toJSON(),
           body: body,
           followRedirect: followRedirect
-        }, (error, response, body) => {
+        }, (error, response, data) => {
           if (error) {
             if (error.code === 'ENOTFOUND') {
               return reject(new Error('It looks like you do not have a network connection. ' +
@@ -30,7 +30,7 @@ export class HttpMiddleware extends KinveyMiddleware {
           request.response = {
             statusCode: response.statusCode,
             headers: response.headers,
-            data: body
+            data: data
           };
 
           return resolve(request);
