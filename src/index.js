@@ -1,4 +1,4 @@
-import { Kinvey } from 'kinvey-javascript-sdk-core';
+import { Kinvey } from './kinvey';
 import { KinveyRackManager } from 'kinvey-javascript-sdk-core/dist/rack/rack';
 import { HttpMiddleware as CoreHttpMiddleware } from 'kinvey-javascript-sdk-core/dist/rack/http';
 import { HttpMiddleware } from './http';
