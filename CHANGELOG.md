@@ -1,4 +1,7 @@
 ## Changelog
+### 3.0.3 (2016-08-11)
+* Enhancement: Update `kinvey-javascript-sdk-core` dependency to version 3.0.3.
+
 ### 3.0.2 (2016-08-03)
 * Enhancement: Update `kinvey-javascript-sdk-core` dependency.
 
