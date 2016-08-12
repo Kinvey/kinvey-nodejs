@@ -1,6 +1,6 @@
 {
   "name": "kinvey-node-sdk",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "description": "Kinvey JavaScript SDK for NodeJS applications.",
   "homepage": "http://www.kinvey.com",
   "bugs": {
@@ -28,7 +28,7 @@
     "test:jenkins": "istanbul cover _mocha -- --reporter tap --compilers js:babel-core/register -r babel-polyfill -s 100 --recursive test > test.tap && istanbul report clover"
   },
   "dependencies": {
-    "kinvey-javascript-sdk-core": "3.0.2",
+    "kinvey-javascript-sdk-core": "3.0.3",
     "lodash": "^4.3.0",
     "request": "^2.69.0"
   },
