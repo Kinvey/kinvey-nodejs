@@ -1,10 +1,7 @@
 import packageJSON from '../package.json';
 import os from 'os';
 
-/**
- * @private
- */
-export class DeviceAdapter {
+export class Device {
   toJSON() {
     return {
       platform: {

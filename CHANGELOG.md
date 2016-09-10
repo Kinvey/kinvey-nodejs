@@ -1,4 +1,8 @@
 ## Changelog
+### 3.1.0 (2016-09-09)
+* Enhancement: Add rack and middleware.
+* Enhancement: Refactor code.
+
 ### 3.0.3 (2016-08-11)
 * Enhancement: Update `kinvey-javascript-sdk-core` dependency to version 3.0.3.
 

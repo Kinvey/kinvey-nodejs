@@ -1,6 +1,6 @@
 {
   "name": "kinvey-node-sdk",
-  "version": "3.0.3",
+  "version": "3.1.0",
   "description": "Kinvey JavaScript SDK for NodeJS applications.",
   "homepage": "http://www.kinvey.com",
   "bugs": {
@@ -14,7 +14,7 @@
     }
   ],
   "author": "Kinvey, Inc.",
-  "main": "./dist/index.js",
+  "main": "./dist/export.js",
   "contributors": [
     "Thomas Conner <thomas@kinvey.com>"
   ],
@@ -23,14 +23,26 @@
     "url": "git@github.com:Kinvey/node-sdk"
   },
   "scripts": {
+    "build": "gulp build",
+    "clean": "gulp clean",
+    "lint": "gulp lint",
     "test": "./node_modules/mocha/bin/mocha --compilers js:babel-core/register -r babel-polyfill -s 100 --recursive test",
     "test:watch": "./node_modules/mocha/bin/mocha -w --compilers js:babel-core/register -r babel-polyfill -s 100 --recursive test",
     "test:jenkins": "istanbul cover _mocha -- --reporter tap --compilers js:babel-core/register -r babel-polyfill -s 100 --recursive test > test.tap && istanbul report clover"
   },
   "dependencies": {
-    "kinvey-javascript-sdk-core": "3.0.3",
+    "es6-promise": "^3.2.1",
+    "fast-memory-cache": "^2.0.4",
+    "kinvey-javascript-rack": "^1.0.0",
+    "kinvey-javascript-sdk-core": "^3.0.0",
     "lodash": "^4.3.0",
+    "promise-queue": "^2.2.3",
+    "regenerator-runtime": "^0.9.5",
     "request": "^2.69.0"
+  },
+  "peerDependencies": {
+    "kinvey-javascript-sdk-core": "^3.0.0",
+    "kinvey-javascript-rack": "^1.0.0"
   },
   "devDependencies": {
     "babel-core": "^6.10.4",
@@ -45,6 +57,7 @@
     "gulp": "^3.9.1",
     "gulp-babel": "^6.1.2",
     "gulp-bump": "^2.2.0",
+    "gulp-env": "^0.4.0",
     "gulp-eslint": "^2.0.0",
     "gulp-git": "^1.7.1",
     "gulp-if": "^2.0.0",
@@ -68,45 +81,5 @@
   "keywords": [
     "Kinvey",
     "NodeJS"
-  ],
-  "babel": {
-    "presets": [
-      "es2015",
-      "stage-2"
-    ]
-  },
-  "eslintConfig": {
-    "extends": "airbnb",
-    "parser": "babel-eslint",
-    "rules": {
-      "comma-dangle": "off",
-      "func-names": "off",
-      "id-length": "off",
-      "max-len": [
-        "warn",
-        {
-          "code": 120,
-          "tabWidth": 2,
-          "ignoreComments": true,
-          "ignoreTrailingComments": true
-        }
-      ],
-      "no-console": "error",
-      "no-loop-func": "warn",
-      "no-param-reassign": "off",
-      "no-shadow": "off",
-      "no-underscore-dangle": "off",
-      "object-shorthand": [
-        "error",
-        "methods"
-      ],
-      "space-before-function-paren": "off"
-    },
-    "env": {
-      "browser": true,
-      "es6": true,
-      "mocha": true,
-      "node": true
-    }
-  }
+  ]
 }
