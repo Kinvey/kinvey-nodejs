@@ -1,29 +1,37 @@
+# NodeJS
+.npm_cache
 node_modules
-.env
-.tmp
-tmp
-.DS_Store
-coverage
 npm-debug.log
-report.xml
-docs
-sandbox
-*.tap
-test
-manual
+
+# Src files
 .babelrc
 .editorconfig
 .eslintrc
 .gitattributes
 .gitignore
 .nvmrc
+/src
+docs
+manual
 esdoc.json
 gulpfile.babel.js
 hints.md
 Makefile
 README.md
-src
-.npm_cache
+
+# Build Files
+.env
+.tmp
+tmp
+
+# Test Files
+coverage
+report.xml
+*.tap
+test
+
+# MacOS Files
+.DS_Store
 
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio and Webstorm
 *.iml

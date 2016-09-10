@@ -46,19 +46,11 @@ Kinvey.ping().then(function(response) {
 You are now ready to start building your awesome apps! Next we recommend diving into the [User guide](http://devcenter.kinvey.com/node-v3.0/guides/users) or [Data store guide](http://devcenter.kinvey.com/node-v3.0/guides/datastore) to learn more about our service, or explore the [sample apps](http://devcenter.kinvey.com/node-v3.0/samples) to go straight to working projects.
 
 ## Build
-The simplest way to build the sdk is by running `gulp`. More advanced tasks are available.
+The simplest way to build the sdk is by running `npm run build`. More advanced scripts are available.
 
-* `gulp build`: build the sdk
-* `gulp bump`: bump the pacakge version. Please see [Flags](#Flags).
-* `gulp clean`: remove files created by the build process
-* `gulp lint`: lint the src files
-* `gulp tag`: create a git tag for the version
-
-#### Flags
-The following flags are available when running `gulp bump`:
-
-* `--type <major|minor|patch|prerelease>`: Bumps the package version using the [Semantic Version 2.0.0](http://semver.org/) spec. Defaults to `patch`.
-* `--version <version>`: Sets the package version to the provided version.
+* `npm run build`: build the sdk
+* `npme run clean`: remove files created by the build process
+* `npm run lint`: lint the src files
 
 ## Test
 
@@ -71,10 +63,10 @@ The workflow for releasing a new version of the sdk is as follows:
 2. Checkout the master branch and merge the develop branch.
 3. Update the [Changelog](CHANGELOG.md).
 4. Run `gulp bump --type <type>` replacing `<type>` with major, minor, patch, or prerelease. See [Flags](#Flags) above.
-5. Run `gulp build` and commit file changes.
-6. Run `gulp tag`.
-7. Make sure all changes are committed on the master branch and push.
-8. Checkout the develop branch and merge the master branch.
+5. Run `npm run build` and commit file changes.
+6. Make sure all changes are committed on the master branch and push.
+7. Checkout the develop branch and merge the master branch.
+8. Tag the version with git.
 9. __Optional:__ Update Dev Center and Sample apps.
 
 *Note: The [Node Release Job](https://build.kinvey.com/jenkins/view/Libraries/job/node-sdk-release/) will publish the [pacakge](https://www.npmjs.com/package/kinvey-node-sdk) on NPM.*

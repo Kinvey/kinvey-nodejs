@@ -1,15 +1,23 @@
+# NodeJS
+.npm_cache
 node_modules
+npm-debug.log
+
+# Src files
+docs
+
+# Build Files
 .env
 .tmp
 tmp
-.DS_Store
+
+# Test Files
 coverage
-tmp
-npm-debug.log
 report.xml
-docs
-sample
-test.tap
+*.tap
+
+# MacOS Files
+.DS_Store
 
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio and Webstorm
 *.iml
