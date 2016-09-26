@@ -4,15 +4,9 @@
   "description": "Kinvey JavaScript SDK for NodeJS applications.",
   "homepage": "http://www.kinvey.com",
   "bugs": {
-    "url": "http://support.kinvey.com",
-    "email": "support@kinvey.com"
+    "url": "https://github.com/Kinvey/kinvey-nodejs/issues"
   },
-  "licenses": [
-    {
-      "type": "Apache-2.0",
-      "url": "https://raw.github.com/Kinvey/kinvey-node-sdk/master/LICENSE.txt"
-    }
-  ],
+  "license": "Apache-2.0",
   "author": "Kinvey, Inc.",
   "main": "./dist/export.js",
   "contributors": [
@@ -20,60 +14,41 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git@github.com:Kinvey/node-sdk"
+    "url": "git@github.com:Kinvey/kinvey-nodejs"
   },
   "scripts": {
-    "build": "gulp build",
-    "clean": "gulp clean",
-    "lint": "gulp lint",
-    "test": "./node_modules/mocha/bin/mocha --compilers js:babel-core/register -r babel-polyfill -s 100 --recursive test",
-    "test:watch": "./node_modules/mocha/bin/mocha -w --compilers js:babel-core/register -r babel-polyfill -s 100 --recursive test",
-    "test:jenkins": "istanbul cover _mocha -- --reporter tap --compilers js:babel-core/register -r babel-polyfill -s 100 --recursive test > test.tap && istanbul report clover"
+    "build": "npm run clean && npm run transpile",
+    "clean": "del coverage dist",
+    "cover": "istanbul cover _mocha -- --compilers js:babel-core/register -r babel-polyfill -s 100 --recursive test/unit/setup test/unit",
+    "docs": "esdoc -c esdoc.json",
+    "lint": "npm run lint:src",
+    "lint:src": "eslint src/**",
+    "lint:test": "eslint test/unit/**",
+    "preversion": "npm test",
+    "postversion": "git push && git push --tags",
+    "test": "mocha --compilers js:babel-core/register -r babel-polyfill -s 100 --recursive test/unit/setup test/unit",
+    "test:watch": "mocha -w --compilers js:babel-core/register -r babel-polyfill -s 100 --recursive test/unit/setup test/unit",
+    "version": "npm run build && git add -A dist"
   },
   "dependencies": {
-    "es6-promise": "^3.2.1",
-    "fast-memory-cache": "^2.0.4",
-    "kinvey-javascript-rack": "^1.0.0",
-    "kinvey-javascript-sdk-core": "^3.0.0",
-    "lodash": "^4.3.0",
-    "promise-queue": "^2.2.3",
-    "regenerator-runtime": "^0.9.5",
-    "request": "^2.69.0"
-  },
-  "peerDependencies": {
-    "kinvey-javascript-sdk-core": "^3.0.0",
-    "kinvey-javascript-rack": "^1.0.0"
-  },
-  "devDependencies": {
-    "babel-core": "^6.10.4",
-    "babel-eslint": "^6.0.2",
-    "babel-polyfill": "^6.9.1",
-    "babel-preset-es2015": "^6.6.0",
-    "babel-preset-stage-2": "^6.5.0",
-    "babel-register": "^6.7.2",
-    "del": "^2.2.0",
-    "eslint-config-airbnb": "^6.2.0",
-    "eslint-plugin-react": "^4.2.3",
-    "gulp": "^3.9.1",
-    "gulp-babel": "^6.1.2",
-    "gulp-bump": "^2.2.0",
-    "gulp-env": "^0.4.0",
-    "gulp-eslint": "^2.0.0",
-    "gulp-git": "^1.7.1",
-    "gulp-if": "^2.0.0",
-    "gulp-plumber": "^1.1.0",
-    "gulp-prompt": "^0.2.0",
-    "gulp-sourcemaps": "^1.6.0",
-    "gulp-tag-version": "^1.3.0",
-    "gulp-util": "^3.0.7",
-    "istanbul": "^0.4.4",
+    "babel-core": "^6.9.0",
+    "babel-eslint": "^6.0.0",
+    "babel-plugin-inline-dotenv": "^1.1.1",
+    "babel-polyfill": "^6.9.0",
+    "babel-preset-es2015": "^6.9.0",
+    "babel-preset-stage-2": "^6.0.15",
+    "babel-register": "^6.9.0",
+    "core-js": "^2.4.1",
+    "del-cli": "^0.2.0",
+    "eslint": "^3.5.0",
+    "eslint-config-airbnb-base": "^7.1.0",
+    "eslint-plugin-import": "^1.15.0",
+    "expect": "^1.20.2",
+    "istanbul": "^1.0.0-alpha.2",
+    "kinvey-javascript-sdk-core": "3.2.0",
     "mocha": "^2.5.3",
     "nock": "^8.0.0",
-    "run-sequence": "^1.1.5",
-    "semver-regex": "^1.0.0",
-    "sinon": "^1.17.4",
-    "sinon-chai": "^2.8.0",
-    "yargs": "^4.7.1"
+    "shelljs": "^0.7.4"
   },
   "engines": {
     "node": ">=4.0"

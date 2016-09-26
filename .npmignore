@@ -11,8 +11,6 @@ npm-debug.log
 .gitignore
 .nvmrc
 /src
-docs
-manual
 esdoc.json
 gulpfile.babel.js
 hints.md
@@ -23,12 +21,14 @@ README.md
 .env
 .tmp
 tmp
+/dist/kinvey-html5-sdk.js
+/dist/kinvey-html5-sdk.min.js
 
 # Test Files
-coverage
+/coverage
 report.xml
 *.tap
-test
+/test
 
 # MacOS Files
 .DS_Store

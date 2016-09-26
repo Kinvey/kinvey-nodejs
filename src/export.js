@@ -1,3 +1,4 @@
-export * from './rack';
-export * from './device';
-export * from './kinvey';
+import Kinvey from './kinvey';
+
+// Export default
+export default Kinvey;
