@@ -3,13 +3,17 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.Windows = undefined;
+exports.Google = undefined;
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
-var _social = require('./social');
+var _identity = require('./identity');
+
+var _identity2 = _interopRequireDefault(_identity);
 
 var _enums = require('./enums');
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
@@ -17,26 +21,26 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
-var Windows = exports.Windows = function (_Social) {
-  _inherits(Windows, _Social);
+var Google = exports.Google = function (_Identity) {
+  _inherits(Google, _Identity);
 
-  function Windows() {
-    _classCallCheck(this, Windows);
+  function Google() {
+    _classCallCheck(this, Google);
 
-    return _possibleConstructorReturn(this, (Windows.__proto__ || Object.getPrototypeOf(Windows)).apply(this, arguments));
+    return _possibleConstructorReturn(this, (Google.__proto__ || Object.getPrototypeOf(Google)).apply(this, arguments));
   }
 
-  _createClass(Windows, [{
+  _createClass(Google, [{
     key: 'identity',
     get: function get() {
-      return _enums.SocialIdentity.Windows;
+      return _enums.SocialIdentity.Google;
     }
   }], [{
     key: 'identity',
     get: function get() {
-      return _enums.SocialIdentity.Windows;
+      return _enums.SocialIdentity.Google;
     }
   }]);
 
-  return Windows;
-}(_social.Social);
+  return Google;
+}(_identity2.default);

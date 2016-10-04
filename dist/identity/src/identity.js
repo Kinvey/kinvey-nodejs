@@ -3,7 +3,6 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.Social = undefined;
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
@@ -33,16 +32,16 @@ if (typeof window !== 'undefined') {
   hello = require('hellojs');
 }
 
-var Social = exports.Social = function () {
-  function Social() {
+var Identity = function () {
+  function Identity() {
     var options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 
-    _classCallCheck(this, Social);
+    _classCallCheck(this, Identity);
 
     this.client = options.client || _client.Client.sharedInstance();
   }
 
-  _createClass(Social, [{
+  _createClass(Identity, [{
     key: 'isSupported',
     value: function isSupported() {
       return !!hello;
@@ -147,5 +146,7 @@ var Social = exports.Social = function () {
     }
   }]);
 
-  return Social;
+  return Identity;
 }();
+
+exports.default = Identity;

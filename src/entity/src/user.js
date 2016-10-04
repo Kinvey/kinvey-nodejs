@@ -4,10 +4,9 @@ import { Metadata } from './metadata';
 import { AuthType, RequestMethod, KinveyRequest, CacheRequest } from '../../request';
 import { KinveyError, NotFoundError, ActiveUserError } from '../../errors';
 import { DataStore, UserStore } from '../../datastore';
-import { Facebook, Google, LinkedIn, MobileIdentityConnect } from '../../social';
+import { Facebook, Google, LinkedIn, MobileIdentityConnect } from '../../identity';
 import { Log } from '../../utils';
 import Promise from 'es6-promise';
-import localStorage from 'local-storage';
 import url from 'url';
 import assign from 'lodash/assign';
 import result from 'lodash/result';
@@ -21,63 +20,6 @@ const kmdAttribute = process.env.KINVEY_KMD_ATTRIBUTE || '_kmd';
 const socialIdentityAttribute = process.env.KINVEY_SOCIAL_IDENTITY_ATTRIBUTE || '_socialIdentity';
 const usernameAttribute = process.env.KINVEY_USERNAME_ATTRIBUTE || 'username';
 const emailAttribute = process.env.KINVEY_EMAIL_ATTRIBUTE || 'email';
-const activeUserCollectionName = process.env.KINVEY_USER_ACTIVE_COLLECTION_NAME || 'kinvey_active_user';
-
-function getActiveUser(client) {
-  const request = new CacheRequest({
-    method: RequestMethod.GET,
-    url: url.format({
-      protocol: client.protocol,
-      host: client.host,
-      pathname: `/${usersNamespace}/${client.appKey}/${activeUserCollectionName}`
-    })
-  });
-  return request.execute()
-    .then(response => response.data)
-    .then((users) => {
-      if (users.length > 0) {
-        return users[0];
-      }
-
-      // Try local storage (legacy)
-      return localStorage.get(`${client.appKey}kinvey_user`);
-    })
-    .catch(() => null);
-}
-
-function setActiveUser(client, user) {
-  // Remove from local storage (legacy)
-  localStorage.remove(`${client.appKey}kinvey_user`);
-
-  const request = new CacheRequest({
-    method: RequestMethod.DELETE,
-    url: url.format({
-      protocol: client.protocol,
-      host: client.host,
-      pathname: `/${usersNamespace}/${client.appKey}/${activeUserCollectionName}`
-    })
-  });
-
-  return request.execute()
-    .then(response => response.data)
-    .then((prevActiveUser) => {
-      if (user) {
-        const request = new CacheRequest({
-          method: RequestMethod.PUT,
-          url: url.format({
-            protocol: client.protocol,
-            host: client.host,
-            pathname: `/${usersNamespace}/${client.appKey}/${activeUserCollectionName}`
-          }),
-          body: user
-        });
-        return request.execute()
-          .then(response => response.data);
-      }
-
-      return prevActiveUser;
-    });
-}
 
 /**
  * The User class is used to represent a single user on the Kinvey platform.
@@ -250,7 +192,7 @@ export class User {
    * @return {?User} The active user.
    */
   static getActiveUser(client = Client.sharedInstance()) {
-    return getActiveUser(client)
+    return CacheRequest.getActiveUser(client)
       .then((data) => {
         if (data) {
           return new this(data, { client: client });
@@ -335,7 +277,7 @@ export class User {
         }
 
         this.data = data;
-        return setActiveUser(this.client, this.data);
+        return CacheRequest.setActiveUser(this.client, this.data);
       })
       .then(() => this);
   }
@@ -626,7 +568,7 @@ export class User {
         Log.error(error);
       })
       .then(() => {
-        return setActiveUser(this.client, null);
+        return CacheRequest.setActiveUser(this.client, null);
       })
       .then(() => {
         return DataStore.clearCache({ client: this.client });
@@ -699,7 +641,7 @@ export class User {
         this.data = data;
 
         if (options.state === true) {
-          return setActiveUser(this.client, this.data);
+          return CacheRequest.setActiveUser(this.client, this.data);
         }
 
         return this;
@@ -772,7 +714,7 @@ export class User {
       })
       .then((isActive) => {
         if (isActive) {
-          return setActiveUser(this.client, this.data);
+          return CacheRequest.setActiveUser(this.client, this.data);
         }
 
         return this;
@@ -836,7 +778,7 @@ export class User {
         return data;
       })
       .then((data) => {
-        return setActiveUser(this.client, data)
+        return CacheRequest.setActiveUser(this.client, data)
           .then(() => {
             this.data = data;
           });

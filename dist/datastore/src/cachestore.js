@@ -154,7 +154,9 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
                 body: networkEntities,
                 timeout: options.timeout
               });
-              return request.execute();
+              return request.execute().then(function (response) {
+                return response.data;
+              });
             });
           }
 
@@ -231,7 +233,9 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
                 body: networkEntity,
                 timeout: options.timeout
               });
-              return request.execute();
+              return request.execute().then(function (response) {
+                return response.data;
+              });
             });
           }
 
@@ -629,9 +633,9 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
             timeout: options.timeout
           });
 
-          return request.execute();
-        }).then(function (response) {
-          return response.data;
+          return request.execute().then(function (response) {
+            return response.data;
+          });
         }).then(function (entities) {
           if (entities && entities.length > 0) {
             var _query2 = new _query3.Query().contains('entityId', Object.keys((0, _keyBy2.default)(entities, idAttribute)));

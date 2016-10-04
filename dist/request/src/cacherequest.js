@@ -10,9 +10,9 @@ var _set = function set(object, property, value, receiver) { var desc = Object.g
 
 var _get = function get(object, property, receiver) { if (object === null) object = Function.prototype; var desc = Object.getOwnPropertyDescriptor(object, property); if (desc === undefined) { var parent = Object.getPrototypeOf(object); if (parent === null) { return undefined; } else { return get(parent, property, receiver); } } else if ("value" in desc) { return desc.value; } else { var getter = desc.get; if (getter === undefined) { return undefined; } return getter.call(receiver); } };
 
-var _request = require('./request');
+var _request2 = require('./request');
 
-var _request2 = _interopRequireDefault(_request);
+var _request3 = _interopRequireDefault(_request2);
 
 var _kinveyresponse = require('./kinveyresponse');
 
@@ -26,6 +26,10 @@ var _url = require('url');
 
 var _url2 = _interopRequireDefault(_url);
 
+var _localStorage = require('local-storage');
+
+var _localStorage2 = _interopRequireDefault(_localStorage);
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -33,6 +37,9 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 function _possibleConstructorReturn(self, call) { if (!self) { throw new ReferenceError("this hasn't been initialised - super() hasn't been called"); } return call && (typeof call === "object" || typeof call === "function") ? call : self; }
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
+
+var usersNamespace = process && process.env && process.env.KINVEY_USERS_NAMESPACE || undefined || 'user';
+var activeUserCollectionName = process && process.env && process.env.KINVEY_USER_ACTIVE_COLLECTION_NAME || undefined || 'kinvey_active_user';
 
 var CacheRequest = function (_Request) {
   _inherits(CacheRequest, _Request);
@@ -104,9 +111,67 @@ var CacheRequest = function (_Request) {
       this.collection = collection;
       this.entityId = entityId;
     }
+  }], [{
+    key: 'getActiveUser',
+    value: function getActiveUser(client) {
+      var request = new CacheRequest({
+        method: _request2.RequestMethod.GET,
+        url: _url2.default.format({
+          protocol: client.protocol,
+          host: client.host,
+          pathname: '/' + usersNamespace + '/' + client.appKey + '/' + activeUserCollectionName
+        })
+      });
+      return request.execute().then(function (response) {
+        return response.data;
+      }).then(function (users) {
+        if (users.length > 0) {
+          return users[0];
+        }
+
+        return _localStorage2.default.get(client.appKey + 'kinvey_user');
+      }).catch(function () {
+        return null;
+      });
+    }
+  }, {
+    key: 'setActiveUser',
+    value: function setActiveUser(client, user) {
+      _localStorage2.default.remove(client.appKey + 'kinvey_user');
+
+      var request = new CacheRequest({
+        method: _request2.RequestMethod.DELETE,
+        url: _url2.default.format({
+          protocol: client.protocol,
+          host: client.host,
+          pathname: '/' + usersNamespace + '/' + client.appKey + '/' + activeUserCollectionName
+        })
+      });
+
+      return request.execute().then(function (response) {
+        return response.data;
+      }).then(function (prevActiveUser) {
+        if (user) {
+          var _request = new CacheRequest({
+            method: _request2.RequestMethod.PUT,
+            url: _url2.default.format({
+              protocol: client.protocol,
+              host: client.host,
+              pathname: '/' + usersNamespace + '/' + client.appKey + '/' + activeUserCollectionName
+            }),
+            body: user
+          });
+          return _request.execute().then(function (response) {
+            return response.data;
+          });
+        }
+
+        return prevActiveUser;
+      });
+    }
   }]);
 
   return CacheRequest;
-}(_request2.default);
+}(_request3.default);
 
 exports.default = CacheRequest;

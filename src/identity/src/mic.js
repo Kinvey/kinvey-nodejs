@@ -1,4 +1,4 @@
-import { Social } from './social';
+import Identity from './identity';
 import { SocialIdentity } from './enums';
 import { AuthType, RequestMethod, KinveyRequest } from '../../request';
 import { KinveyError } from '../../errors';
@@ -25,7 +25,7 @@ export { AuthorizationGrant };
 /**
  * @private
  */
-export class MobileIdentityConnect extends Social {
+export class MobileIdentityConnect extends Identity {
   get identity() {
     return SocialIdentity.MobileIdentityConnect;
   }
@@ -200,7 +200,7 @@ export class MobileIdentityConnect extends Social {
         followRedirect: false
       });
       return request.execute();
-    }).then(response => {
+    }).then((response) => {
       const location = response.getHeader('location');
 
       if (location) {
@@ -234,8 +234,7 @@ export class MobileIdentityConnect extends Social {
         code: code
       }
     });
-    const promise = request.execute().then(response => response.data);
-    return promise;
+    return request.execute().then(response => response.data);
   }
 
   logout(user, options = {}) {

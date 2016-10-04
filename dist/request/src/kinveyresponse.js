@@ -48,7 +48,7 @@ var KinveyResponse = function (_Response) {
         return new _errors.FeatureUnavailableError(message, debug, code);
       } else if (name === 'IncompleteRequestBodyError') {
         return new _errors.IncompleteRequestBodyError(message, debug, code);
-      } else if (name === 'InsufficientCredentials') {
+      } else if (name === 'InsufficientCredentials' || code === _response.StatusCode.Unauthorized) {
         return new _errors.InsufficientCredentialsError(message, debug, code);
       } else if (name === 'InvalidCredentials') {
         return new _errors.InvalidCredentialsError(message, debug, code);

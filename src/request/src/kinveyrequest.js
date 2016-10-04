@@ -4,80 +4,19 @@ import Headers from './headers';
 import NetworkRequest from './networkrequest';
 import KinveyResponse from './kinveyresponse';
 import { InvalidCredentialsError, NoActiveUserError } from '../../errors';
-import { SocialIdentity } from '../../social';
+import { SocialIdentity } from '../../identity';
 import Promise from 'es6-promise';
-import localStorage from 'local-storage';
 import url from 'url';
 import qs from 'qs';
 import appendQuery from 'append-query';
 import assign from 'lodash/assign';
 import defaults from 'lodash/defaults';
-import isNumber from 'lodash/isNumber';
 import isEmpty from 'lodash/isEmpty';
 import isFunction from 'lodash/isFunction';
-const socialIdentityAttribute = process.env.KINVEY_SOCIAL_IDENTITY_ATTRIBUTE || '_socialIdentity';
 const tokenPathname = process.env.KINVEY_MIC_TOKEN_PATHNAME || '/oauth/token';
 const usersNamespace = process.env.KINVEY_USERS_NAMESPACE || 'user';
-const kmdAttribute = process.env.KINVEY_KMD_ATTRIBUTE || '_kmd';
 const defaultApiVersion = process.env.KINVEY_DEFAULT_API_VERSION || 4;
 const customPropertiesMaxBytesAllowed = process.env.KINVEY_MAX_HEADER_BYTES || 2000;
-const activeUserCollectionName = process.env.KINVEY_USER_ACTIVE_COLLECTION_NAME || 'kinvey_active_user';
-
-function getActiveUser(client) {
-  const request = new CacheRequest({
-    method: RequestMethod.GET,
-    url: url.format({
-      protocol: client.protocol,
-      host: client.host,
-      pathname: `/${usersNamespace}/${client.appKey}/${activeUserCollectionName}`
-    })
-  });
-  return request.execute()
-    .then(response => response.data)
-    .then((users) => {
-      if (users.length > 0) {
-        return users[0];
-      }
-
-      // Try local storage (legacy)
-      return localStorage.get(`${client.appKey}kinvey_user`);
-    })
-    .catch(() => null);
-}
-
-function setActiveUser(client, user) {
-  // Remove from local storage (legacy)
-  localStorage.remove(`${client.appKey}kinvey_user`);
-
-  const request = new CacheRequest({
-    method: RequestMethod.DELETE,
-    url: url.format({
-      protocol: client.protocol,
-      host: client.host,
-      pathname: `/${usersNamespace}/${client.appKey}/${activeUserCollectionName}`
-    })
-  });
-
-  return request.execute()
-    .then(response => response.data)
-    .then((prevActiveUser) => {
-      if (user) {
-        const request = new CacheRequest({
-          method: RequestMethod.PUT,
-          url: url.format({
-            protocol: client.protocol,
-            host: client.host,
-            pathname: `/${usersNamespace}/${client.appKey}/${activeUserCollectionName}`
-          }),
-          body: user
-        });
-        return request.execute()
-          .then(response => response.data);
-      }
-
-      return prevActiveUser;
-    });
-}
 
 /**
  * @private
@@ -172,7 +111,7 @@ const Auth = {
    * @returns {Object}
    */
   session(client) {
-    return getActiveUser(client)
+    return CacheRequest.getActiveUser(client)
       .then((activeUser) => {
         if (!activeUser) {
           throw new NoActiveUserError('There is not an active user. Please login a user and retry the request.');
@@ -180,7 +119,7 @@ const Auth = {
 
         return {
           scheme: 'Kinvey',
-          credentials: activeUser[kmdAttribute].authtoken
+          credentials: activeUser._kmd.authtoken
         };
       });
   }
@@ -222,7 +161,6 @@ export default class KinveyRequest extends NetworkRequest {
 
     this.authType = options.authType || AuthType.None;
     this.query = options.query;
-    this.apiVersion = defaultApiVersion;
     this.properties = options.properties || new Properties();
     this.skipBL = options.skipBL === true;
     this.trace = options.trace === true;
@@ -247,7 +185,7 @@ export default class KinveyRequest extends NetworkRequest {
 
     // Add the X-Kinvey-API-Version header
     if (!headers.has('X-Kinvey-Api-Version')) {
-      headers.set('X-Kinvey-Api-Version', this.apiVersion);
+      headers.set('X-Kinvey-Api-Version', defaultApiVersion);
     }
 
     // Add or remove the X-Kinvey-Skip-Business-Logic header
@@ -323,14 +261,6 @@ export default class KinveyRequest extends NetworkRequest {
 
   set url(urlString) {
     super.url = urlString;
-  }
-
-  get apiVersion() {
-    return this._apiVersion;
-  }
-
-  set apiVersion(apiVersion) {
-    this._apiVersion = isNumber(apiVersion) ? apiVersion : defaultApiVersion;
   }
 
   get properties() {
@@ -416,19 +346,20 @@ export default class KinveyRequest extends NetworkRequest {
       })
       .catch((error) => {
         if (error instanceof InvalidCredentialsError) {
-          return getActiveUser(this.client)
+          return CacheRequest.getActiveUser(this.client)
             .then((user) => {
               if (!user) {
                 throw error;
               }
 
-              const socialIdentities = user[socialIdentityAttribute];
+              const socialIdentities = user._socialIdentity;
               const sessionKey = Object.keys(socialIdentities).find((sessionKey) => {
-                return typeof socialIdentities[sessionKey].refresh_token !== 'undefined';
+                return socialIdentities[sessionKey].identity === SocialIdentity.MobileIdentityConnect;
               });
               const session = socialIdentities[sessionKey];
 
               if (session) {
+                // Refresh MIC Token
                 if (session.identity === SocialIdentity.MobileIdentityConnect) {
                   const refreshMICRequest = new KinveyRequest({
                     method: RequestMethod.POST,
@@ -456,8 +387,8 @@ export default class KinveyRequest extends NetworkRequest {
                     .then((newSession) => {
                       // Login the user with the new mic session
                       const data = {};
-                      data[socialIdentityAttribute] = {};
-                      data[socialIdentityAttribute][SocialIdentity.MobileIdentityConnect] = newSession;
+                      data._socialIdentity = {};
+                      data._socialIdentity[session.identity] = newSession;
 
                       // Login the user
                       const loginRequest = new KinveyRequest({
@@ -477,8 +408,8 @@ export default class KinveyRequest extends NetworkRequest {
                         .then(response => response.data);
                     })
                     .then((user) => {
-                      user[socialIdentityAttribute][session.identity] = defaults(user[socialIdentityAttribute][session.identity], session);
-                      return setActiveUser(this.client, user);
+                      user._socialIdentity[session.identity] = defaults(user._socialIdentity[session.identity], session);
+                      return CacheRequest.setActiveUser(this.client, user);
                     })
                     .then(() => {
                       return this.execute(rawResponse);

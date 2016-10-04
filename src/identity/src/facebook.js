@@ -1,5 +1,5 @@
 /* eslint-disable camelcase */
-import { Social } from './social';
+import Identity from './identity';
 import { SocialIdentity } from './enums';
 import { KinveyError } from '../../errors';
 import { randomString } from '../../utils';
@@ -11,7 +11,7 @@ import url from 'url';
 /**
  * @private
  */
-export class Facebook extends Social {
+export class Facebook extends Identity {
   get identity() {
     return SocialIdentity.Facebook;
   }

@@ -43,36 +43,16 @@ var SerializeMiddleware = function (_Middleware) {
           if (contentType.indexOf('application/json') === 0) {
             request.body = JSON.stringify(request.body);
           } else if (contentType.indexOf('application/x-www-form-urlencoded') === 0) {
-            var body = request.body;
-            var keys = Object.keys(body);
-            var str = [];
+            (function () {
+              var body = request.body;
+              var str = [];
 
-            var _iteratorNormalCompletion = true;
-            var _didIteratorError = false;
-            var _iteratorError = undefined;
-
-            try {
-              for (var _iterator = keys[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
-                var key = _step.value;
-
+              Object.keys(body).forEach(function (key) {
                 str.push(global.encodeURIComponent(key) + '=' + global.encodeURIComponent(body[key]));
-              }
-            } catch (err) {
-              _didIteratorError = true;
-              _iteratorError = err;
-            } finally {
-              try {
-                if (!_iteratorNormalCompletion && _iterator.return) {
-                  _iterator.return();
-                }
-              } finally {
-                if (_didIteratorError) {
-                  throw _iteratorError;
-                }
-              }
-            }
+              });
 
-            request.body = str.join('&');
+              request.body = str.join('&');
+            })();
           }
         }
       }

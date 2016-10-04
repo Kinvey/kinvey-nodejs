@@ -44,7 +44,7 @@
     "core-js": "^2.4.1",
     "del-cli": "^0.2.0",
     "es6-error": "^3.0.0",
-    "es6-promise": "git+https://git@github.com/ThomasConner/es6-promise.git",
+    "es6-promise": "^4.0.4",
     "esdoc": "^0.4.7",
     "esdoc-es7-plugin": "0.0.3",
     "eslint": "^3.5.0",

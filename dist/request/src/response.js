@@ -30,7 +30,8 @@ var StatusCode = {
   NotModified: 304,
   ResumeIncomplete: 308,
   NotFound: 404,
-  ServerError: 500
+  ServerError: 500,
+  Unauthorized: 401
 };
 Object.freeze(StatusCode);
 exports.StatusCode = StatusCode;

@@ -4,7 +4,7 @@ import { Query } from './query';
 import { Aggregation } from './aggregation';
 import { DataStore, DataStoreType, FileStore } from './datastore';
 import { Acl, Metadata, User, UserStore } from './entity';
-import { AuthorizationGrant, SocialIdentity } from './social';
+import { AuthorizationGrant, SocialIdentity } from './identity';
 import { AuthType, RequestMethod, KinveyRequest } from './request';
 import { KinveyError } from './errors';
 import url from 'url';

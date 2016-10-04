@@ -126,7 +126,8 @@ export class CacheStore extends NetworkStore {
                   body: networkEntities,
                   timeout: options.timeout
                 });
-                return request.execute();
+                return request.execute()
+                  .then(response => response.data);
               });
           }
 
@@ -211,7 +212,8 @@ export class CacheStore extends NetworkStore {
                   body: networkEntity,
                   timeout: options.timeout
                 });
-                return request.execute();
+                return request.execute()
+                  .then(response => response.data);
               });
           }
 
@@ -643,9 +645,9 @@ export class CacheStore extends NetworkStore {
           });
 
           // Execute the request
-          return request.execute();
+          return request.execute()
+            .then(response => response.data);
         })
-        .then(response => response.data)
         .then((entities) => {
           if (entities && entities.length > 0) {
             // Clear entities from the sync table

@@ -18,7 +18,7 @@ var _datastore = require('./datastore');
 
 var _entity = require('./entity');
 
-var _social = require('./social');
+var _identity = require('./identity');
 
 var _request = require('./request');
 
@@ -99,10 +99,10 @@ var Kinvey = function () {
 
 Kinvey.Acl = _entity.Acl;
 Kinvey.Aggregation = _aggregation.Aggregation;
-Kinvey.AuthorizationGrant = _social.AuthorizationGrant;
+Kinvey.AuthorizationGrant = _identity.AuthorizationGrant;
 Kinvey.DataStoreType = _datastore.DataStoreType;
 Kinvey.Metadata = _entity.Metadata;
 Kinvey.Query = _query.Query;
-Kinvey.SocialIdentity = _social.SocialIdentity;
+Kinvey.SocialIdentity = _identity.SocialIdentity;
 
 exports.default = Kinvey;

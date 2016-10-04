@@ -13,23 +13,19 @@ var _acl = require('./acl');
 
 var _metadata = require('./metadata');
 
-var _request2 = require('../../request');
+var _request = require('../../request');
 
 var _errors = require('../../errors');
 
 var _datastore = require('../../datastore');
 
-var _social = require('../../social');
+var _identity = require('../../identity');
 
 var _utils = require('../../utils');
 
 var _es6Promise = require('es6-promise');
 
 var _es6Promise2 = _interopRequireDefault(_es6Promise);
-
-var _localStorage = require('local-storage');
-
-var _localStorage2 = _interopRequireDefault(_localStorage);
 
 var _url = require('url');
 
@@ -66,63 +62,6 @@ var kmdAttribute = process && process.env && process.env.KINVEY_KMD_ATTRIBUTE ||
 var socialIdentityAttribute = process && process.env && process.env.KINVEY_SOCIAL_IDENTITY_ATTRIBUTE || undefined || '_socialIdentity';
 var usernameAttribute = process && process.env && process.env.KINVEY_USERNAME_ATTRIBUTE || undefined || 'username';
 var emailAttribute = process && process.env && process.env.KINVEY_EMAIL_ATTRIBUTE || undefined || 'email';
-var activeUserCollectionName = process && process.env && process.env.KINVEY_USER_ACTIVE_COLLECTION_NAME || undefined || 'kinvey_active_user';
-
-function _getActiveUser(client) {
-  var request = new _request2.CacheRequest({
-    method: _request2.RequestMethod.GET,
-    url: _url2.default.format({
-      protocol: client.protocol,
-      host: client.host,
-      pathname: '/' + usersNamespace + '/' + client.appKey + '/' + activeUserCollectionName
-    })
-  });
-  return request.execute().then(function (response) {
-    return response.data;
-  }).then(function (users) {
-    if (users.length > 0) {
-      return users[0];
-    }
-
-    return _localStorage2.default.get(client.appKey + 'kinvey_user');
-  }).catch(function () {
-    return null;
-  });
-}
-
-function setActiveUser(client, user) {
-  _localStorage2.default.remove(client.appKey + 'kinvey_user');
-
-  var request = new _request2.CacheRequest({
-    method: _request2.RequestMethod.DELETE,
-    url: _url2.default.format({
-      protocol: client.protocol,
-      host: client.host,
-      pathname: '/' + usersNamespace + '/' + client.appKey + '/' + activeUserCollectionName
-    })
-  });
-
-  return request.execute().then(function (response) {
-    return response.data;
-  }).then(function (prevActiveUser) {
-    if (user) {
-      var _request = new _request2.CacheRequest({
-        method: _request2.RequestMethod.PUT,
-        url: _url2.default.format({
-          protocol: client.protocol,
-          host: client.host,
-          pathname: '/' + usersNamespace + '/' + client.appKey + '/' + activeUserCollectionName
-        }),
-        body: user
-      });
-      return _request.execute().then(function (response) {
-        return response.data;
-      });
-    }
-
-    return prevActiveUser;
-  });
-}
 
 var User = exports.User = function () {
   function User() {
@@ -198,9 +137,9 @@ var User = exports.User = function () {
           throw new _errors.KinveyError('Username and/or password missing. Please provide both a username and password to login.');
         }
 
-        var request = new _request2.KinveyRequest({
-          method: _request2.RequestMethod.POST,
-          authType: _request2.AuthType.App,
+        var request = new _request.KinveyRequest({
+          method: _request.RequestMethod.POST,
+          authType: _request.AuthType.App,
           url: _url2.default.format({
             protocol: _this2.client.apiProtocol,
             host: _this2.client.apiHost,
@@ -220,7 +159,7 @@ var User = exports.User = function () {
         }
 
         _this2.data = data;
-        return setActiveUser(_this2.client, _this2.data);
+        return _request.CacheRequest.setActiveUser(_this2.client, _this2.data);
       }).then(function () {
         return _this2;
       });
@@ -243,10 +182,10 @@ var User = exports.User = function () {
           throw new _errors.ActiveUserError('An active user already exists. Please logout the active user before you login.');
         }
 
-        var mic = new _social.MobileIdentityConnect({ client: _this3.client });
+        var mic = new _identity.MobileIdentityConnect({ client: _this3.client });
         return mic.login(redirectUri, authorizationGrant, options);
       }).then(function (session) {
-        return _this3.connectIdentity(_social.MobileIdentityConnect.identity, session, options);
+        return _this3.connectIdentity(_identity.MobileIdentityConnect.identity, session, options);
       });
     }
   }, {
@@ -285,45 +224,45 @@ var User = exports.User = function () {
     value: function connectFacebook(clientId, options) {
       var _this5 = this;
 
-      var facebook = new _social.Facebook({ client: this.client });
+      var facebook = new _identity.Facebook({ client: this.client });
       return facebook.login(clientId, options).then(function (session) {
-        return _this5.connectIdentity(_social.Facebook.identity, session, options);
+        return _this5.connectIdentity(_identity.Facebook.identity, session, options);
       });
     }
   }, {
     key: 'disconnectFacebook',
     value: function disconnectFacebook(options) {
-      return this.disconnectIdentity(_social.Facebook.identity, options);
+      return this.disconnectIdentity(_identity.Facebook.identity, options);
     }
   }, {
     key: 'connectGoogle',
     value: function connectGoogle(clientId, options) {
       var _this6 = this;
 
-      var google = new _social.Google({ client: this.client });
+      var google = new _identity.Google({ client: this.client });
       return google.login(clientId, options).then(function (session) {
-        return _this6.connectIdentity(_social.Google.identity, session, options);
+        return _this6.connectIdentity(_identity.Google.identity, session, options);
       });
     }
   }, {
     key: 'disconnectGoogle',
     value: function disconnectGoogle(options) {
-      return this.disconnectIdentity(_social.Google.identity, options);
+      return this.disconnectIdentity(_identity.Google.identity, options);
     }
   }, {
     key: 'googleconnectLinkedIn',
     value: function googleconnectLinkedIn(clientId, options) {
       var _this7 = this;
 
-      var linkedIn = new _social.LinkedIn({ client: this.client });
+      var linkedIn = new _identity.LinkedIn({ client: this.client });
       return linkedIn.login(clientId, options).then(function (session) {
-        return _this7.connectIdentity(_social.LinkedIn.identity, session, options);
+        return _this7.connectIdentity(_identity.LinkedIn.identity, session, options);
       });
     }
   }, {
     key: 'disconnectLinkedIn',
     value: function disconnectLinkedIn(options) {
-      return this.disconnectIdentity(_social.LinkedIn.identity, options);
+      return this.disconnectIdentity(_identity.LinkedIn.identity, options);
     }
   }, {
     key: 'disconnectIdentity',
@@ -332,14 +271,14 @@ var User = exports.User = function () {
 
       var promise = _es6Promise2.default.resolve();
 
-      if (identity === _social.Facebook.identity) {
-        promise = _social.Facebook.logout(this, options);
-      } else if (identity === _social.Google.identity) {
-        promise = _social.Google.logout(this, options);
-      } else if (identity === _social.LinkedIn.identity) {
-        promise = _social.LinkedIn.logout(this, options);
-      } else if (identity === _social.MobileIdentityConnect.identity) {
-        promise = _social.MobileIdentityConnect.logout(this, options);
+      if (identity === _identity.Facebook.identity) {
+        promise = _identity.Facebook.logout(this, options);
+      } else if (identity === _identity.Google.identity) {
+        promise = _identity.Google.logout(this, options);
+      } else if (identity === _identity.LinkedIn.identity) {
+        promise = _identity.LinkedIn.logout(this, options);
+      } else if (identity === _identity.MobileIdentityConnect.identity) {
+        promise = _identity.MobileIdentityConnect.logout(this, options);
       }
 
       return promise.catch(function (error) {
@@ -367,9 +306,9 @@ var User = exports.User = function () {
 
       var options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 
-      var request = new _request2.KinveyRequest({
-        method: _request2.RequestMethod.POST,
-        authType: _request2.AuthType.Session,
+      var request = new _request.KinveyRequest({
+        method: _request.RequestMethod.POST,
+        authType: _request.AuthType.Session,
         url: _url2.default.format({
           protocol: this.client.apiProtocol,
           host: this.client.apiHost,
@@ -391,7 +330,7 @@ var User = exports.User = function () {
       }).catch(function (error) {
         _utils.Log.error(error);
       }).then(function () {
-        return setActiveUser(_this9.client, null);
+        return _request.CacheRequest.setActiveUser(_this9.client, null);
       }).then(function () {
         return _datastore.DataStore.clearCache({ client: _this9.client });
       }).catch(function (error) {
@@ -420,9 +359,9 @@ var User = exports.User = function () {
           data = data.data;
         }
 
-        var request = new _request2.KinveyRequest({
-          method: _request2.RequestMethod.POST,
-          authType: _request2.AuthType.App,
+        var request = new _request.KinveyRequest({
+          method: _request.RequestMethod.POST,
+          authType: _request.AuthType.App,
           url: _url2.default.format({
             protocol: _this10.client.protocol,
             host: _this10.client.host,
@@ -441,7 +380,7 @@ var User = exports.User = function () {
         _this10.data = data;
 
         if (options.state === true) {
-          return setActiveUser(_this10.client, _this10.data);
+          return _request.CacheRequest.setActiveUser(_this10.client, _this10.data);
         }
 
         return _this10;
@@ -469,7 +408,7 @@ var User = exports.User = function () {
         return _this11.isActive();
       }).then(function (isActive) {
         if (isActive) {
-          return setActiveUser(_this11.client, _this11.data);
+          return _request.CacheRequest.setActiveUser(_this11.client, _this11.data);
         }
 
         return _this11;
@@ -484,9 +423,9 @@ var User = exports.User = function () {
 
       var options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 
-      var request = new _request2.KinveyRequest({
-        method: _request2.RequestMethod.GET,
-        authType: _request2.AuthType.Session,
+      var request = new _request.KinveyRequest({
+        method: _request.RequestMethod.GET,
+        authType: _request.AuthType.Session,
         url: _url2.default.format({
           protocol: this.client.protocol,
           host: this.client.host,
@@ -511,7 +450,7 @@ var User = exports.User = function () {
 
         return data;
       }).then(function (data) {
-        return setActiveUser(_this12.client, data).then(function () {
+        return _request.CacheRequest.setActiveUser(_this12.client, data).then(function () {
           _this12.data = data;
         });
       }).then(function () {
@@ -581,7 +520,7 @@ var User = exports.User = function () {
 
       var client = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : _client.Client.sharedInstance();
 
-      return _getActiveUser(client).then(function (data) {
+      return _request.CacheRequest.getActiveUser(client).then(function (data) {
         if (data) {
           return new _this13(data, { client: client });
         }
@@ -688,9 +627,9 @@ var User = exports.User = function () {
       }
 
       var client = options.client || _client.Client.sharedInstance();
-      var request = new _request2.KinveyRequest({
-        method: _request2.RequestMethod.POST,
-        authType: _request2.AuthType.App,
+      var request = new _request.KinveyRequest({
+        method: _request.RequestMethod.POST,
+        authType: _request.AuthType.App,
         url: _url2.default.format({
           protocol: client.protocol,
           host: client.host,
@@ -718,9 +657,9 @@ var User = exports.User = function () {
       }
 
       var client = options.client || _client.Client.sharedInstance();
-      var request = new _request2.KinveyRequest({
-        method: _request2.RequestMethod.POST,
-        authType: _request2.AuthType.App,
+      var request = new _request.KinveyRequest({
+        method: _request.RequestMethod.POST,
+        authType: _request.AuthType.App,
         url: _url2.default.format({
           protocol: client.protocol,
           host: client.host,
@@ -749,9 +688,9 @@ var User = exports.User = function () {
       }
 
       var client = options.client || _client.Client.sharedInstance();
-      var request = new _request2.KinveyRequest({
-        method: _request2.RequestMethod.POST,
-        authType: _request2.AuthType.App,
+      var request = new _request.KinveyRequest({
+        method: _request.RequestMethod.POST,
+        authType: _request.AuthType.App,
         url: _url2.default.format({
           protocol: client.protocol,
           host: client.host,

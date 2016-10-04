@@ -1,10 +1,10 @@
-import { Social } from './social';
+import Identity from './identity';
 import { SocialIdentity } from './enums';
 
 /**
  * @private
  */
-export class LinkedIn extends Social {
+export class LinkedIn extends Identity {
   get identity() {
     return SocialIdentity.LinkedIn;
   }

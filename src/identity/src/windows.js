@@ -1,10 +1,10 @@
-import { Social } from './social';
+import Identity from './identity';
 import { SocialIdentity } from './enums';
 
 /**
  * @private
  */
-export class Windows extends Social {
+export class Windows extends Identity {
   get identity() {
     return SocialIdentity.Windows;
   }

@@ -11,7 +11,7 @@ var _set = function set(object, property, value, receiver) { var desc = Object.g
 
 var _get = function get(object, property, receiver) { if (object === null) object = Function.prototype; var desc = Object.getOwnPropertyDescriptor(object, property); if (desc === undefined) { var parent = Object.getPrototypeOf(object); if (parent === null) { return undefined; } else { return get(parent, property, receiver); } } else if ("value" in desc) { return desc.value; } else { var getter = desc.get; if (getter === undefined) { return undefined; } return getter.call(receiver); } };
 
-var _request2 = require('./request');
+var _request = require('./request');
 
 var _cacherequest = require('./cacherequest');
 
@@ -31,15 +31,11 @@ var _kinveyresponse2 = _interopRequireDefault(_kinveyresponse);
 
 var _errors = require('../../errors');
 
-var _social = require('../../social');
+var _identity = require('../../identity');
 
 var _es6Promise = require('es6-promise');
 
 var _es6Promise2 = _interopRequireDefault(_es6Promise);
-
-var _localStorage = require('local-storage');
-
-var _localStorage2 = _interopRequireDefault(_localStorage);
 
 var _url = require('url');
 
@@ -61,10 +57,6 @@ var _defaults = require('lodash/defaults');
 
 var _defaults2 = _interopRequireDefault(_defaults);
 
-var _isNumber = require('lodash/isNumber');
-
-var _isNumber2 = _interopRequireDefault(_isNumber);
-
 var _isEmpty = require('lodash/isEmpty');
 
 var _isEmpty2 = _interopRequireDefault(_isEmpty);
@@ -81,69 +73,10 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
-var socialIdentityAttribute = process && process.env && process.env.KINVEY_SOCIAL_IDENTITY_ATTRIBUTE || undefined || '_socialIdentity';
 var tokenPathname = process && process.env && process.env.KINVEY_MIC_TOKEN_PATHNAME || undefined || '/oauth/token';
 var usersNamespace = process && process.env && process.env.KINVEY_USERS_NAMESPACE || undefined || 'user';
-var kmdAttribute = process && process.env && process.env.KINVEY_KMD_ATTRIBUTE || undefined || '_kmd';
 var defaultApiVersion = process && process.env && process.env.KINVEY_DEFAULT_API_VERSION || undefined || 4;
 var customPropertiesMaxBytesAllowed = process && process.env && process.env.KINVEY_MAX_HEADER_BYTES || undefined || 2000;
-var activeUserCollectionName = process && process.env && process.env.KINVEY_USER_ACTIVE_COLLECTION_NAME || undefined || 'kinvey_active_user';
-
-function getActiveUser(client) {
-  var request = new _cacherequest2.default({
-    method: _request2.RequestMethod.GET,
-    url: _url2.default.format({
-      protocol: client.protocol,
-      host: client.host,
-      pathname: '/' + usersNamespace + '/' + client.appKey + '/' + activeUserCollectionName
-    })
-  });
-  return request.execute().then(function (response) {
-    return response.data;
-  }).then(function (users) {
-    if (users.length > 0) {
-      return users[0];
-    }
-
-    return _localStorage2.default.get(client.appKey + 'kinvey_user');
-  }).catch(function () {
-    return null;
-  });
-}
-
-function setActiveUser(client, user) {
-  _localStorage2.default.remove(client.appKey + 'kinvey_user');
-
-  var request = new _cacherequest2.default({
-    method: _request2.RequestMethod.DELETE,
-    url: _url2.default.format({
-      protocol: client.protocol,
-      host: client.host,
-      pathname: '/' + usersNamespace + '/' + client.appKey + '/' + activeUserCollectionName
-    })
-  });
-
-  return request.execute().then(function (response) {
-    return response.data;
-  }).then(function (prevActiveUser) {
-    if (user) {
-      var _request = new _cacherequest2.default({
-        method: _request2.RequestMethod.PUT,
-        url: _url2.default.format({
-          protocol: client.protocol,
-          host: client.host,
-          pathname: '/' + usersNamespace + '/' + client.appKey + '/' + activeUserCollectionName
-        }),
-        body: user
-      });
-      return _request.execute().then(function (response) {
-        return response.data;
-      });
-    }
-
-    return prevActiveUser;
-  });
-}
 
 var AuthType = {
   All: 'All',
@@ -195,14 +128,14 @@ var Auth = {
     return _es6Promise2.default.resolve(null);
   },
   session: function session(client) {
-    return getActiveUser(client).then(function (activeUser) {
+    return _cacherequest2.default.getActiveUser(client).then(function (activeUser) {
       if (!activeUser) {
         throw new _errors.NoActiveUserError('There is not an active user. Please login a user and retry the request.');
       }
 
       return {
         scheme: 'Kinvey',
-        credentials: activeUser[kmdAttribute].authtoken
+        credentials: activeUser._kmd.authtoken
       };
     });
   }
@@ -254,7 +187,6 @@ var KinveyRequest = function (_NetworkRequest) {
 
     _this2.authType = options.authType || AuthType.None;
     _this2.query = options.query;
-    _this2.apiVersion = defaultApiVersion;
     _this2.properties = options.properties || new Properties();
     _this2.skipBL = options.skipBL === true;
     _this2.trace = options.trace === true;
@@ -329,21 +261,21 @@ var KinveyRequest = function (_NetworkRequest) {
         return response;
       }).catch(function (error) {
         if (error instanceof _errors.InvalidCredentialsError) {
-          return getActiveUser(_this3.client).then(function (user) {
+          return _cacherequest2.default.getActiveUser(_this3.client).then(function (user) {
             if (!user) {
               throw error;
             }
 
-            var socialIdentities = user[socialIdentityAttribute];
+            var socialIdentities = user._socialIdentity;
             var sessionKey = Object.keys(socialIdentities).find(function (sessionKey) {
-              return typeof socialIdentities[sessionKey].refresh_token !== 'undefined';
+              return socialIdentities[sessionKey].identity === _identity.SocialIdentity.MobileIdentityConnect;
             });
             var session = socialIdentities[sessionKey];
 
             if (session) {
-              if (session.identity === _social.SocialIdentity.MobileIdentityConnect) {
+              if (session.identity === _identity.SocialIdentity.MobileIdentityConnect) {
                 var refreshMICRequest = new KinveyRequest({
-                  method: _request2.RequestMethod.POST,
+                  method: _request.RequestMethod.POST,
                   headers: {
                     'Content-Type': 'application/x-www-form-urlencoded'
                   },
@@ -367,11 +299,11 @@ var KinveyRequest = function (_NetworkRequest) {
                   return response.data;
                 }).then(function (newSession) {
                   var data = {};
-                  data[socialIdentityAttribute] = {};
-                  data[socialIdentityAttribute][_social.SocialIdentity.MobileIdentityConnect] = newSession;
+                  data._socialIdentity = {};
+                  data._socialIdentity[session.identity] = newSession;
 
                   var loginRequest = new KinveyRequest({
-                    method: _request2.RequestMethod.POST,
+                    method: _request.RequestMethod.POST,
                     authType: AuthType.App,
                     url: _url2.default.format({
                       protocol: _this3.client.protocol,
@@ -387,8 +319,8 @@ var KinveyRequest = function (_NetworkRequest) {
                     return response.data;
                   });
                 }).then(function (user) {
-                  user[socialIdentityAttribute][session.identity] = (0, _defaults2.default)(user[socialIdentityAttribute][session.identity], session);
-                  return setActiveUser(_this3.client, user);
+                  user._socialIdentity[session.identity] = (0, _defaults2.default)(user._socialIdentity[session.identity], session);
+                  return _cacherequest2.default.setActiveUser(_this3.client, user);
                 }).then(function () {
                   return _this3.execute(rawResponse);
                 });
@@ -421,7 +353,7 @@ var KinveyRequest = function (_NetworkRequest) {
       }
 
       if (!headers.has('X-Kinvey-Api-Version')) {
-        headers.set('X-Kinvey-Api-Version', this.apiVersion);
+        headers.set('X-Kinvey-Api-Version', defaultApiVersion);
       }
 
       if (this.skipBL === true) {
@@ -487,14 +419,6 @@ var KinveyRequest = function (_NetworkRequest) {
     },
     set: function set(urlString) {
       _set(KinveyRequest.prototype.__proto__ || Object.getPrototypeOf(KinveyRequest.prototype), 'url', urlString, this);
-    }
-  }, {
-    key: 'apiVersion',
-    get: function get() {
-      return this._apiVersion;
-    },
-    set: function set(apiVersion) {
-      this._apiVersion = (0, _isNumber2.default)(apiVersion) ? apiVersion : defaultApiVersion;
     }
   }, {
     key: 'properties',

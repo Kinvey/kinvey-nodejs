@@ -15,12 +15,11 @@ export default class SerializeMiddleware extends Middleware {
           request.body = JSON.stringify(request.body);
         } else if (contentType.indexOf('application/x-www-form-urlencoded') === 0) {
           const body = request.body;
-          const keys = Object.keys(body);
           const str = [];
 
-          for (const key of keys) {
+          Object.keys(body).forEach((key) => {
             str.push(`${global.encodeURIComponent(key)}=${global.encodeURIComponent(body[key])}`);
-          }
+          });
 
           request.body = str.join('&');
         }

@@ -12,7 +12,7 @@ if (typeof window !== 'undefined') {
 /**
  * @private
  */
-export class Social {
+export default class Identity {
   constructor(options = {}) {
     this.client = options.client || Client.sharedInstance();
   }
