@@ -24,7 +24,7 @@ export function nested(obj, dotProperty, value) {
  * @private
  */
 export function isDefined(obj) {
-  return obj !== undefined && obj !== null;
+  return typeof obj !== 'undefined' && obj !== null;
 }
 
 /**
