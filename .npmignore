@@ -29,6 +29,7 @@ tmp
 report.xml
 *.tap
 /test
+/test2
 
 # MacOS Files
 .DS_Store
