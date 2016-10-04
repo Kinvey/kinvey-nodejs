@@ -12,8 +12,6 @@ import values from 'lodash/values';
 import forEach from 'lodash/forEach';
 import isArray from 'lodash/isArray';
 import isString from 'lodash/isString';
-const idAttribute = process.env.KINVEY_ID_ATTRIBUTE || '_id';
-const kmdAttribute = process.env.KINVEY_KMD_ATTRIBUTE || '_kmd';
 const maxIdsPerRequest = 200;
 
 /**
@@ -48,18 +46,16 @@ export default class DeltaFetchRequest extends KinveyRequest {
   }
 
   execute() {
-    return super.execute()
-      .then(() => {
-        const request = new CacheRequest({
-          method: RequestMethod.GET,
-          url: this.url,
-          headers: this.headers,
-          query: this.query,
-          timeout: this.timeout,
-          client: this.client
-        });
-        return request.execute().then(response => response.data);
-      })
+    const request = new CacheRequest({
+      method: RequestMethod.GET,
+      url: this.url,
+      headers: this.headers,
+      query: this.query,
+      timeout: this.timeout,
+      client: this.client
+    });
+    return request.execute()
+      .then(response => response.data)
       .catch((error) => {
         if (!(error instanceof NotFoundError)) {
           throw error;
@@ -69,22 +65,28 @@ export default class DeltaFetchRequest extends KinveyRequest {
       })
       .then((cacheData) => {
         if (isArray(cacheData) && cacheData.length > 0) {
-          const cacheDocuments = keyBy(cacheData, idAttribute);
+          const cacheDocuments = keyBy(cacheData, '_id');
           const query = new Query(result(this.query, 'toJSON', this.query));
-          query.fields = [idAttribute, `${kmdAttribute}.lmt`];
+          query.fields = ['_id', '_kmd.lmt'];
           const request = new KinveyRequest({
             method: RequestMethod.GET,
             url: this.url,
             headers: this.headers,
-            auth: this.auth,
+            authType: this.authType,
             query: query,
             timeout: this.timeout,
-            client: this.client
+            client: this.client,
+            properties: this.properties,
+            skipBL: this.skipBL,
+            trace: this.trace,
+            followRedirect: this.followRedirect,
+            cache: this.cache
           });
 
-          return request.execute().then(response => response.data)
+          return request.execute()
+            .then(response => response.data)
             .then((networkData) => {
-              const networkDocuments = keyBy(networkData, idAttribute);
+              const networkDocuments = keyBy(networkData, '_id');
               const deltaSet = networkDocuments;
               const cacheDocumentIds = Object.keys(cacheDocuments);
 
@@ -93,8 +95,8 @@ export default class DeltaFetchRequest extends KinveyRequest {
                 const networkDocument = networkDocuments[id];
 
                 if (networkDocument) {
-                  if (networkDocument[kmdAttribute] && cacheDocument[kmdAttribute]
-                      && networkDocument[kmdAttribute].lmt === cacheDocument[kmdAttribute].lmt) {
+                  if (networkDocument._kmd && cacheDocument._kmd
+                      && networkDocument._kmd.lmt === cacheDocument._kmd.lmt) {
                     delete deltaSet[id];
                   } else {
                     delete cacheDocuments[id];
@@ -112,15 +114,21 @@ export default class DeltaFetchRequest extends KinveyRequest {
                 const query = new Query(result(this.query, 'toJSON', this.query));
                 const ids = deltaSetIds.slice(i, deltaSetIds.length > maxIdsPerRequest + i ?
                                                  maxIdsPerRequest : deltaSetIds.length);
-                query.contains(idAttribute, ids);
+                query.contains('_id', ids);
+
                 const request = new KinveyRequest({
                   method: RequestMethod.GET,
                   url: this.url,
                   headers: this.headers,
-                  auth: this.auth,
+                  authType: this.authType,
                   query: query,
                   timeout: this.timeout,
-                  client: this.client
+                  client: this.client,
+                  properties: this.properties,
+                  skipBL: this.skipBL,
+                  trace: this.trace,
+                  followRedirect: this.followRedirect,
+                  cache: this.cache
                 });
 
                 const promise = request.execute();
@@ -134,7 +142,7 @@ export default class DeltaFetchRequest extends KinveyRequest {
               const response = reduce(responses, (result, response) => {
                 if (response.isSuccess()) {
                   const headers = result.headers;
-                  headers.addHeaders(response.headers);
+                  headers.addAll(response.headers);
                   result.headers = headers;
                   result.data = result.data.concat(response.data);
                 }
@@ -161,10 +169,15 @@ export default class DeltaFetchRequest extends KinveyRequest {
           method: RequestMethod.GET,
           url: this.url,
           headers: this.headers,
-          auth: this.auth,
+          authType: this.authType,
           query: this.query,
           timeout: this.timeout,
-          client: this.client
+          client: this.client,
+          properties: this.properties,
+          skipBL: this.skipBL,
+          trace: this.trace,
+          followRedirect: this.followRedirect,
+          cache: this.cache
         });
         return request.execute();
       });

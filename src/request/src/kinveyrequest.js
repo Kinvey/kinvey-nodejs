@@ -275,8 +275,8 @@ export default class KinveyRequest extends NetworkRequest {
     this._properties = properties;
   }
 
-  execute(rawResponse = false) {
-    let promise = Promise.resolve();
+  getAuthorizationHeader() {
+    let promise = Promise.resolve(undefined);
 
     // Add or remove the Authorization header
     if (this.authType) {
@@ -309,8 +309,6 @@ export default class KinveyRequest extends NetworkRequest {
                 });
             });
       }
-    } else {
-      this.headers.remove('Authorization');
     }
 
     return promise
@@ -323,7 +321,20 @@ export default class KinveyRequest extends NetworkRequest {
             credentials = new Buffer(`${authInfo.username}:${authInfo.password}`).toString('base64');
           }
 
-          this.headers.set('Authorization', `${authInfo.scheme} ${credentials}`);
+          return `${authInfo.scheme} ${credentials}`;
+        }
+
+        return undefined;
+      });
+  }
+
+  execute(rawResponse = false) {
+    return this.getAuthorizationHeader()
+      .then((authorizationHeader) => {
+        if (authorizationHeader) {
+          this.headers.set('Authorization', authorizationHeader);
+        } else {
+          this.headers.remove('Authorization');
         }
       })
       .then(() => {
