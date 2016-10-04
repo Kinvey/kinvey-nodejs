@@ -43,19 +43,19 @@ export class Client {
 
     if (options.apiHostname && isString(options.apiHostname)) {
       const apiHostnameParsed = url.parse(options.apiHostname);
-      options.apiProtocol = apiHostnameParsed.protocol;
+      options.apiProtocol = apiHostnameParsed.protocol || 'https:';
       options.apiHost = apiHostnameParsed.host;
     }
 
     if (options.micHostname && isString(options.micHostname)) {
       const micHostnameParsed = url.parse(options.micHostname);
-      options.micProtocol = micHostnameParsed.protocol;
+      options.micProtocol = micHostnameParsed.protocol || 'https:';
       options.micHost = micHostnameParsed.host;
     }
 
     if (options.liveServiceHostname && isString(options.liveServiceHostname)) {
       const liveServiceHostnameParsed = url.parse(options.liveServiceHostname);
-      options.liveServiceProtocol = liveServiceHostnameParsed.protocol;
+      options.liveServiceProtocol = liveServiceHostnameParsed.protocol || 'https:';
       options.liveServiceHost = liveServiceHostnameParsed.host;
     }
 
