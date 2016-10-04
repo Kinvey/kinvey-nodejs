@@ -2,7 +2,7 @@ import Promise from 'es6-promise';
 import agent from 'superagent';
 
 export default class Http {
-  static handle(request) {
+  handle(request) {
     const promise = new Promise((resolve, reject) => {
       const { url, method, headers, body, timeout } = request;
 

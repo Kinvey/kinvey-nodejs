@@ -718,6 +718,7 @@ export class CacheStore extends NetworkStore {
    * @return  {Promise}                                                         Promise
    */
   pull(query, options = {}) {
+    options = assign({ useDeltaFetch: this.useDeltaFetch }, options);
     return this.syncManager.pull(query, options)
       .then((entities) => {
         // Clear the cache
@@ -755,6 +756,7 @@ export class CacheStore extends NetworkStore {
    * @return  {Promise}                                                         Promise
    */
   sync(query, options) {
+    options = assign({ useDeltaFetch: this.useDeltaFetch }, options);
     return this.syncManager.sync(query, options);
   }
 

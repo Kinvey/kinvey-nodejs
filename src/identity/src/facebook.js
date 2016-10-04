@@ -51,8 +51,13 @@ export class Facebook extends Identity {
       const redirectUri = options.redirectUri || global.location.href;
       const originalState = randomString();
       const Popup = this.client.popupClass;
-      const popup = new Popup();
       let redirected = false;
+
+      if (!Popup) {
+        return reject(new KinveyError('Popup is undefined. Unable to connect to Facebook.'));
+      }
+
+      const popup = new Popup();
 
       // Handle the response from a login request
       const oauthCallback = (urlString) => {
@@ -149,6 +154,7 @@ export class Facebook extends Identity {
           state: originalState
         }
       }));
+      return popup;
     });
 
     return promise;
