@@ -45,7 +45,7 @@ export class MobileIdentityConnect extends Identity {
         } else if (authorizationGrant === AuthorizationGrant.AuthorizationCodeAPI) {
           // Step 1a: Request a temp login url
           return this.requestTempLoginUrl(clientId, redirectUri, options)
-            .then(url => this.requestCodeWithUrl(url, clientId, redirectUri, options)); // Step 1b: Request a code
+            .then((url) => this.requestCodeWithUrl(url, clientId, redirectUri, options)); // Step 1b: Request a code
         }
 
         throw new KinveyError(`The authorization grant ${authorizationGrant} is unsupported. ` +
@@ -94,7 +94,8 @@ export class MobileIdentityConnect extends Identity {
         response_type: 'code'
       }
     });
-    return request.execute().then(response => response.data.temp_login_uri);
+    return request.execute()
+      .then(response => response.data.temp_login_uri);
   }
 
   requestCodeWithPopup(clientId, redirectUri, options = {}) {
@@ -201,7 +202,7 @@ export class MobileIdentityConnect extends Identity {
       });
       return request.execute();
     }).then((response) => {
-      const location = response.getHeader('location');
+      const location = response.headers.get('location');
 
       if (location) {
         return url.parse(location, true).query.code;
