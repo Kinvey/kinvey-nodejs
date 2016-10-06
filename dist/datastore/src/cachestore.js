@@ -683,6 +683,7 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
 
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
+      options = (0, _assign2.default)({ useDeltaFetch: this.useDeltaFetch }, options);
       return this.syncManager.pull(query, options).then(function (entities) {
         return _this10.clear(query, options).then(function () {
           var saveRequest = new _request.CacheRequest({
@@ -706,6 +707,7 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
   }, {
     key: 'sync',
     value: function sync(query, options) {
+      options = (0, _assign2.default)({ useDeltaFetch: this.useDeltaFetch }, options);
       return this.syncManager.sync(query, options);
     }
   }, {

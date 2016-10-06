@@ -240,7 +240,7 @@ var MobileIdentityConnect = exports.MobileIdentityConnect = function (_Identity)
         });
         return request.execute();
       }).then(function (response) {
-        var location = response.getHeader('location');
+        var location = response.headers.get('location');
 
         if (location) {
           return _url2.default.parse(location, true).query.code;

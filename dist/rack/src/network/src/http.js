@@ -23,7 +23,7 @@ var Http = function () {
     _classCallCheck(this, Http);
   }
 
-  _createClass(Http, null, [{
+  _createClass(Http, [{
     key: 'handle',
     value: function handle(request) {
       var promise = new _es6Promise2.default(function (resolve, reject) {
@@ -32,9 +32,11 @@ var Http = function () {
         var headers = request.headers;
         var body = request.body;
         var timeout = request.timeout;
+        var followRedirect = request.followRedirect;
 
+        var redirects = followRedirect === true ? 5 : 0;
 
-        (0, _superagent2.default)(method, url).set(headers).send(body).timeout(timeout).end(function (error, response) {
+        (0, _superagent2.default)(method, url).set(headers).send(body).timeout(timeout).redirects(redirects).end(function (error, response) {
           if (error) {
             response = error.response;
           }

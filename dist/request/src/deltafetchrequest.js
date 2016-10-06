@@ -70,8 +70,6 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
-var idAttribute = process && process.env && process.env.KINVEY_ID_ATTRIBUTE || undefined || '_id';
-var kmdAttribute = process && process.env && process.env.KINVEY_KMD_ATTRIBUTE || undefined || '_kmd';
 var maxIdsPerRequest = 200;
 
 var DeltaFetchRequest = function (_KinveyRequest) {
@@ -88,18 +86,16 @@ var DeltaFetchRequest = function (_KinveyRequest) {
     value: function execute() {
       var _this2 = this;
 
-      return _get(DeltaFetchRequest.prototype.__proto__ || Object.getPrototypeOf(DeltaFetchRequest.prototype), 'execute', this).call(this).then(function () {
-        var request = new _cacherequest2.default({
-          method: _request2.RequestMethod.GET,
-          url: _this2.url,
-          headers: _this2.headers,
-          query: _this2.query,
-          timeout: _this2.timeout,
-          client: _this2.client
-        });
-        return request.execute().then(function (response) {
-          return response.data;
-        });
+      var request = new _cacherequest2.default({
+        method: _request2.RequestMethod.GET,
+        url: this.url,
+        headers: this.headers,
+        query: this.query,
+        timeout: this.timeout,
+        client: this.client
+      });
+      return request.execute().then(function (response) {
+        return response.data;
       }).catch(function (error) {
         if (!(error instanceof _errors.NotFoundError)) {
           throw error;
@@ -109,24 +105,29 @@ var DeltaFetchRequest = function (_KinveyRequest) {
       }).then(function (cacheData) {
         if ((0, _isArray2.default)(cacheData) && cacheData.length > 0) {
           var _ret = function () {
-            var cacheDocuments = (0, _keyBy2.default)(cacheData, idAttribute);
+            var cacheDocuments = (0, _keyBy2.default)(cacheData, '_id');
             var query = new _query3.Query((0, _result2.default)(_this2.query, 'toJSON', _this2.query));
-            query.fields = [idAttribute, kmdAttribute + '.lmt'];
+            query.fields = ['_id', '_kmd.lmt'];
             var request = new _kinveyrequest2.default({
               method: _request2.RequestMethod.GET,
               url: _this2.url,
               headers: _this2.headers,
-              auth: _this2.auth,
+              authType: _this2.authType,
               query: query,
               timeout: _this2.timeout,
-              client: _this2.client
+              client: _this2.client,
+              properties: _this2.properties,
+              skipBL: _this2.skipBL,
+              trace: _this2.trace,
+              followRedirect: _this2.followRedirect,
+              cache: _this2.cache
             });
 
             return {
               v: request.execute().then(function (response) {
                 return response.data;
               }).then(function (networkData) {
-                var networkDocuments = (0, _keyBy2.default)(networkData, idAttribute);
+                var networkDocuments = (0, _keyBy2.default)(networkData, '_id');
                 var deltaSet = networkDocuments;
                 var cacheDocumentIds = Object.keys(cacheDocuments);
 
@@ -135,7 +136,7 @@ var DeltaFetchRequest = function (_KinveyRequest) {
                   var networkDocument = networkDocuments[id];
 
                   if (networkDocument) {
-                    if (networkDocument[kmdAttribute] && cacheDocument[kmdAttribute] && networkDocument[kmdAttribute].lmt === cacheDocument[kmdAttribute].lmt) {
+                    if (networkDocument._kmd && cacheDocument._kmd && networkDocument._kmd.lmt === cacheDocument._kmd.lmt) {
                       delete deltaSet[id];
                     } else {
                       delete cacheDocuments[id];
@@ -152,15 +153,21 @@ var DeltaFetchRequest = function (_KinveyRequest) {
                 while (i < deltaSetIds.length) {
                   var _query = new _query3.Query((0, _result2.default)(_this2.query, 'toJSON', _this2.query));
                   var ids = deltaSetIds.slice(i, deltaSetIds.length > maxIdsPerRequest + i ? maxIdsPerRequest : deltaSetIds.length);
-                  _query.contains(idAttribute, ids);
+                  _query.contains('_id', ids);
+
                   var _request = new _kinveyrequest2.default({
                     method: _request2.RequestMethod.GET,
                     url: _this2.url,
                     headers: _this2.headers,
-                    auth: _this2.auth,
+                    authType: _this2.authType,
                     query: _query,
                     timeout: _this2.timeout,
-                    client: _this2.client
+                    client: _this2.client,
+                    properties: _this2.properties,
+                    skipBL: _this2.skipBL,
+                    trace: _this2.trace,
+                    followRedirect: _this2.followRedirect,
+                    cache: _this2.cache
                   });
 
                   var promise = _request.execute();
@@ -173,7 +180,7 @@ var DeltaFetchRequest = function (_KinveyRequest) {
                 var response = (0, _reduce2.default)(responses, function (result, response) {
                   if (response.isSuccess()) {
                     var headers = result.headers;
-                    headers.addHeaders(response.headers);
+                    headers.addAll(response.headers);
                     result.headers = headers;
                     result.data = result.data.concat(response.data);
                   }
@@ -204,10 +211,15 @@ var DeltaFetchRequest = function (_KinveyRequest) {
           method: _request2.RequestMethod.GET,
           url: _this2.url,
           headers: _this2.headers,
-          auth: _this2.auth,
+          authType: _this2.authType,
           query: _this2.query,
           timeout: _this2.timeout,
-          client: _this2.client
+          client: _this2.client,
+          properties: _this2.properties,
+          skipBL: _this2.skipBL,
+          trace: _this2.trace,
+          followRedirect: _this2.followRedirect,
+          cache: _this2.cache
         });
         return request.execute();
       });

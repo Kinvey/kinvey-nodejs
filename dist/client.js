@@ -47,19 +47,19 @@ var Client = exports.Client = function () {
 
     if (options.apiHostname && (0, _isString2.default)(options.apiHostname)) {
       var apiHostnameParsed = _url2.default.parse(options.apiHostname);
-      options.apiProtocol = apiHostnameParsed.protocol;
+      options.apiProtocol = apiHostnameParsed.protocol || 'https:';
       options.apiHost = apiHostnameParsed.host;
     }
 
     if (options.micHostname && (0, _isString2.default)(options.micHostname)) {
       var micHostnameParsed = _url2.default.parse(options.micHostname);
-      options.micProtocol = micHostnameParsed.protocol;
+      options.micProtocol = micHostnameParsed.protocol || 'https:';
       options.micHost = micHostnameParsed.host;
     }
 
     if (options.liveServiceHostname && (0, _isString2.default)(options.liveServiceHostname)) {
       var liveServiceHostnameParsed = _url2.default.parse(options.liveServiceHostname);
-      options.liveServiceProtocol = liveServiceHostnameParsed.protocol;
+      options.liveServiceProtocol = liveServiceHostnameParsed.protocol || 'https:';
       options.liveServiceHost = liveServiceHostnameParsed.host;
     }
 

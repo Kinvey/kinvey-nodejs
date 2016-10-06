@@ -12,6 +12,8 @@ var _endpoint = require('./endpoint');
 
 var _query = require('./query');
 
+var _utils = require('./utils');
+
 var _aggregation = require('./aggregation');
 
 var _datastore = require('./datastore');
@@ -101,6 +103,7 @@ Kinvey.Acl = _entity.Acl;
 Kinvey.Aggregation = _aggregation.Aggregation;
 Kinvey.AuthorizationGrant = _identity.AuthorizationGrant;
 Kinvey.DataStoreType = _datastore.DataStoreType;
+Kinvey.Log = _utils.Log;
 Kinvey.Metadata = _entity.Metadata;
 Kinvey.Query = _query.Query;
 Kinvey.SocialIdentity = _identity.SocialIdentity;

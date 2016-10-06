@@ -98,8 +98,9 @@ var Headers = function () {
 
       var names = Object.keys(headers);
       (0, _forEach2.default)(names, function (name) {
-        var value = headers[name];
-        _this.set(name, value);
+        try {
+          _this.set(name, headers[name]);
+        } catch (error) {}
       });
       return this;
     }

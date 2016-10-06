@@ -78,15 +78,13 @@ var User = exports.User = function () {
   _createClass(User, [{
     key: 'isActive',
     value: function isActive() {
-      var _this = this;
+      var activeUser = User.getActiveUser(this.client);
 
-      return User.getActiveUser(this.client).then(function (activeUser) {
-        if (activeUser && activeUser[idAttribute] === _this[idAttribute]) {
-          return true;
-        }
+      if (activeUser && activeUser[idAttribute] === this[idAttribute]) {
+        return true;
+      }
 
-        return false;
-      });
+      return false;
     }
   }, {
     key: 'isEmailVerified',
@@ -97,7 +95,7 @@ var User = exports.User = function () {
   }, {
     key: 'login',
     value: function login(username, password) {
-      var _this2 = this;
+      var _this = this;
 
       var options = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
 
@@ -112,106 +110,96 @@ var User = exports.User = function () {
         };
       }
 
-      return this.isActive().then(function (isActive) {
-        if (isActive) {
-          throw new _errors.ActiveUserError('This user is already the active user.');
+      if (this.isActive()) {
+        return _es6Promise2.default.reject(new _errors.ActiveUserError('This user is already the active user.'));
+      }
+
+      if (User.getActiveUser(this.client)) {
+        return _es6Promise2.default.reject(new _errors.ActiveUserError('An active user already exists. Please logout the active user before you login.'));
+      }
+
+      if (!credentials[socialIdentityAttribute]) {
+        if (credentials.username) {
+          credentials.username = String(credentials.username).trim();
         }
 
-        return User.getActiveUser(_this2.client);
-      }).then(function (activeUser) {
-        if (activeUser) {
-          throw new _errors.ActiveUserError('An active user already exists. Please logout the active user before you login.');
+        if (credentials.password) {
+          credentials.password = String(credentials.password).trim();
         }
+      }
 
-        if (!credentials[socialIdentityAttribute]) {
-          if (credentials.username) {
-            credentials.username = String(credentials.username).trim();
-          }
+      if ((!credentials.username || credentials.username === '' || !credentials.password || credentials.password === '') && !credentials[socialIdentityAttribute]) {
+        return _es6Promise2.default.reject(new _errors.KinveyError('Username and/or password missing. Please provide both a username and password to login.'));
+      }
 
-          if (credentials.password) {
-            credentials.password = String(credentials.password).trim();
-          }
-        }
-
-        if ((!credentials.username || credentials.username === '' || !credentials.password || credentials.password === '') && !credentials[socialIdentityAttribute]) {
-          throw new _errors.KinveyError('Username and/or password missing. Please provide both a username and password to login.');
-        }
-
-        var request = new _request.KinveyRequest({
-          method: _request.RequestMethod.POST,
-          authType: _request.AuthType.App,
-          url: _url2.default.format({
-            protocol: _this2.client.apiProtocol,
-            host: _this2.client.apiHost,
-            pathname: _this2.pathname + '/login'
-          }),
-          body: credentials,
-          properties: options.properties,
-          timeout: options.timeout,
-          client: _this2.client
-        });
-        return request.execute();
-      }).then(function (response) {
+      var request = new _request.KinveyRequest({
+        method: _request.RequestMethod.POST,
+        authType: _request.AuthType.App,
+        url: _url2.default.format({
+          protocol: this.client.apiProtocol,
+          host: this.client.apiHost,
+          pathname: this.pathname + '/login'
+        }),
+        body: credentials,
+        properties: options.properties,
+        timeout: options.timeout,
+        client: this.client
+      });
+      return request.execute().then(function (response) {
         return response.data;
       }).then(function (data) {
         if (credentials[socialIdentityAttribute]) {
           data[socialIdentityAttribute] = credentials[socialIdentityAttribute];
         }
 
-        _this2.data = data;
-        return _request.CacheRequest.setActiveUser(_this2.client, _this2.data);
+        _this.data = data;
+        _request.CacheRequest.setActiveUserLegacy(_this.client, _this.data);
       }).then(function () {
-        return _this2;
+        return _this;
       });
     }
   }, {
     key: 'loginWithMIC',
     value: function loginWithMIC(redirectUri, authorizationGrant) {
-      var _this3 = this;
+      var _this2 = this;
 
       var options = arguments.length > 2 && arguments[2] !== undefined ? arguments[2] : {};
 
-      return this.isActive().then(function (isActive) {
-        if (isActive) {
-          throw new _errors.ActiveUserError('This user is already the active user.');
-        }
+      if (this.isActive()) {
+        return _es6Promise2.default.reject(new _errors.ActiveUserError('This user is already the active user.'));
+      }
 
-        return User.getActiveUser(_this3.client);
-      }).then(function (activeUser) {
-        if (activeUser) {
-          throw new _errors.ActiveUserError('An active user already exists. Please logout the active user before you login.');
-        }
+      if (User.getActiveUser(this.client)) {
+        return _es6Promise2.default.reject(new _errors.ActiveUserError('An active user already exists. Please logout the active user before you login.'));
+      }
 
-        var mic = new _identity.MobileIdentityConnect({ client: _this3.client });
-        return mic.login(redirectUri, authorizationGrant, options);
-      }).then(function (session) {
-        return _this3.connectIdentity(_identity.MobileIdentityConnect.identity, session, options);
+      var mic = new _identity.MobileIdentityConnect({ client: this.client });
+      return mic.login(redirectUri, authorizationGrant, options).then(function (session) {
+        return _this2.connectIdentity(_identity.MobileIdentityConnect.identity, session, options);
       });
     }
   }, {
     key: 'connectIdentity',
     value: function connectIdentity(identity, session, options) {
-      var _this4 = this;
+      var _this3 = this;
 
-      return this.isActive().then(function (isActive) {
-        var data = {};
-        var socialIdentity = data[socialIdentityAttribute] || {};
-        socialIdentity[identity] = session;
-        data[socialIdentityAttribute] = socialIdentity;
+      var data = {};
+      var socialIdentity = data[socialIdentityAttribute] || {};
+      socialIdentity[identity] = session;
+      data[socialIdentityAttribute] = socialIdentity;
 
-        if (isActive) {
-          return _this4.update(data, options);
+      if (this.isActive()) {
+        return this.update(data, options);
+      }
+
+      return this.login(data, options).catch(function (error) {
+        if (error instanceof _errors.NotFoundError) {
+          return _this3.signup(data, options).then(function () {
+            return _this3.connectIdentity(identity, session, options);
+          });
         }
 
-        return _this4.login(data, options).catch(function (error) {
-          if (error instanceof _errors.NotFoundError) {
-            return _this4.signup(data, options).then(function () {
-              return _this4.connectIdentity(identity, session, options);
-            });
-          }
-
-          throw error;
-        });
+        throw error;
       });
     }
   }, {
@@ -222,11 +210,11 @@ var User = exports.User = function () {
   }, {
     key: 'connectFacebook',
     value: function connectFacebook(clientId, options) {
-      var _this5 = this;
+      var _this4 = this;
 
       var facebook = new _identity.Facebook({ client: this.client });
       return facebook.login(clientId, options).then(function (session) {
-        return _this5.connectIdentity(_identity.Facebook.identity, session, options);
+        return _this4.connectIdentity(_identity.Facebook.identity, session, options);
       });
     }
   }, {
@@ -237,11 +225,11 @@ var User = exports.User = function () {
   }, {
     key: 'connectGoogle',
     value: function connectGoogle(clientId, options) {
-      var _this6 = this;
+      var _this5 = this;
 
       var google = new _identity.Google({ client: this.client });
       return google.login(clientId, options).then(function (session) {
-        return _this6.connectIdentity(_identity.Google.identity, session, options);
+        return _this5.connectIdentity(_identity.Google.identity, session, options);
       });
     }
   }, {
@@ -252,11 +240,11 @@ var User = exports.User = function () {
   }, {
     key: 'googleconnectLinkedIn',
     value: function googleconnectLinkedIn(clientId, options) {
-      var _this7 = this;
+      var _this6 = this;
 
       var linkedIn = new _identity.LinkedIn({ client: this.client });
       return linkedIn.login(clientId, options).then(function (session) {
-        return _this7.connectIdentity(_identity.LinkedIn.identity, session, options);
+        return _this6.connectIdentity(_identity.LinkedIn.identity, session, options);
       });
     }
   }, {
@@ -267,7 +255,7 @@ var User = exports.User = function () {
   }, {
     key: 'disconnectIdentity',
     value: function disconnectIdentity(identity, options) {
-      var _this8 = this;
+      var _this7 = this;
 
       var promise = _es6Promise2.default.resolve();
 
@@ -284,25 +272,25 @@ var User = exports.User = function () {
       return promise.catch(function (error) {
         _utils.Log.error(error);
       }).then(function () {
-        var data = _this8.data;
+        var data = _this7.data;
         var socialIdentity = data[socialIdentityAttribute] || {};
         delete socialIdentity[identity];
         data[socialIdentityAttribute] = socialIdentity;
-        _this8.data = data;
+        _this7.data = data;
 
-        if (!_this8[idAttribute]) {
-          return _this8;
+        if (!_this7[idAttribute]) {
+          return _this7;
         }
 
-        return _this8.update(data, options);
+        return _this7.update(data, options);
       }).then(function () {
-        return _this8;
+        return _this7;
       });
     }
   }, {
     key: 'logout',
     value: function logout() {
-      var _this9 = this;
+      var _this8 = this;
 
       var options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 
@@ -322,27 +310,27 @@ var User = exports.User = function () {
       return request.execute().catch(function (error) {
         _utils.Log.error(error);
       }).then(function () {
-        var identities = Object.keys(_this9._socialIdentity || {});
+        var identities = Object.keys(_this8._socialIdentity || {});
         var promises = identities.map(function (identity) {
-          return _this9.disconnectIdentity(identity, options);
+          return _this8.disconnectIdentity(identity, options);
         });
         return _es6Promise2.default.all(promises);
       }).catch(function (error) {
         _utils.Log.error(error);
       }).then(function () {
-        return _request.CacheRequest.setActiveUser(_this9.client, null);
+        return _request.CacheRequest.setActiveUserLegacy(_this8.client, null);
       }).then(function () {
-        return _datastore.DataStore.clearCache({ client: _this9.client });
+        return _datastore.DataStore.clearCache({ client: _this8.client });
       }).catch(function (error) {
         _utils.Log.error(error);
       }).then(function () {
-        return _this9;
+        return _this8;
       });
     }
   }, {
     key: 'signup',
     value: function signup(data) {
-      var _this10 = this;
+      var _this9 = this;
 
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
@@ -350,42 +338,40 @@ var User = exports.User = function () {
         state: true
       }, options);
 
-      return User.getActiveUser(this.client).then(function (activeUser) {
-        if (options.state === true && activeUser) {
-          throw new _errors.ActiveUserError('An active user already exists. Please logout the active user before you login.');
-        }
+      if (options.state === true && User.getActiveUser(this.client)) {
+        return _es6Promise2.default.reject(new _errors.ActiveUserError('An active user already exists. Please logout the active user before you login.'));
+      }
 
-        if (data instanceof User) {
-          data = data.data;
-        }
+      if (data instanceof User) {
+        data = data.data;
+      }
 
-        var request = new _request.KinveyRequest({
-          method: _request.RequestMethod.POST,
-          authType: _request.AuthType.App,
-          url: _url2.default.format({
-            protocol: _this10.client.protocol,
-            host: _this10.client.host,
-            pathname: _this10.pathname
-          }),
-          body: (0, _isEmpty2.default)(data) ? null : data,
-          properties: options.properties,
-          timeout: options.timeout,
-          client: _this10.client
-        });
+      var request = new _request.KinveyRequest({
+        method: _request.RequestMethod.POST,
+        authType: _request.AuthType.App,
+        url: _url2.default.format({
+          protocol: this.client.protocol,
+          host: this.client.host,
+          pathname: this.pathname
+        }),
+        body: (0, _isEmpty2.default)(data) ? null : data,
+        properties: options.properties,
+        timeout: options.timeout,
+        client: this.client
+      });
 
-        return request.execute();
-      }).then(function (response) {
+      return request.execute().then(function (response) {
         return response.data;
       }).then(function (data) {
-        _this10.data = data;
+        _this9.data = data;
 
         if (options.state === true) {
-          return _request.CacheRequest.setActiveUser(_this10.client, _this10.data);
+          return _request.CacheRequest.setActiveUserLegacy(_this9.client, _this9.data);
         }
 
-        return _this10;
+        return _this9;
       }).then(function () {
-        return _this10;
+        return _this9;
       });
     }
   }, {
@@ -399,27 +385,27 @@ var User = exports.User = function () {
   }, {
     key: 'update',
     value: function update(data, options) {
-      var _this11 = this;
+      var _this10 = this;
 
       data = (0, _assign2.default)(this.data, data);
       var userStore = new _datastore.UserStore();
       return userStore.update(data, options).then(function () {
-        _this11.data = data;
-        return _this11.isActive();
+        _this10.data = data;
+        return _this10.isActive();
       }).then(function (isActive) {
         if (isActive) {
-          return _request.CacheRequest.setActiveUser(_this11.client, _this11.data);
+          return _request.CacheRequest.setActiveUserLegacy(_this10.client, _this10.data);
         }
 
-        return _this11;
+        return _this10;
       }).then(function () {
-        return _this11;
+        return _this10;
       });
     }
   }, {
     key: 'me',
     value: function me() {
-      var _this12 = this;
+      var _this11 = this;
 
       var options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 
@@ -439,22 +425,21 @@ var User = exports.User = function () {
         return response.data;
       }).then(function (data) {
         if (!data[kmdAttribute].authtoken) {
-          return User.getActiveUser(_this12.client).then(function (activeUser) {
-            if (activeUser) {
-              data[kmdAttribute].authtoken = activeUser.authtoken;
-            }
+          var activeUser = User.getActiveUser(_this11.client);
 
-            return data;
-          });
+          if (activeUser) {
+            data[kmdAttribute].authtoken = activeUser.authtoken;
+          }
+
+          return data;
         }
 
         return data;
       }).then(function (data) {
-        return _request.CacheRequest.setActiveUser(_this12.client, data).then(function () {
-          _this12.data = data;
-        });
+        _request.CacheRequest.setActiveUserLegacy(_this11.client, data);
+        _this11.data = data;
       }).then(function () {
-        return _this12;
+        return _this11;
       });
     }
   }, {
@@ -516,17 +501,15 @@ var User = exports.User = function () {
   }], [{
     key: 'getActiveUser',
     value: function getActiveUser() {
-      var _this13 = this;
-
       var client = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : _client.Client.sharedInstance();
 
-      return _request.CacheRequest.getActiveUser(client).then(function (data) {
-        if (data) {
-          return new _this13(data, { client: client });
-        }
+      var data = _request.CacheRequest.getActiveUserLegacy(client);
 
-        return null;
-      });
+      if (data) {
+        return new this(data, { client: client });
+      }
+
+      return null;
     }
   }, {
     key: 'login',
@@ -571,13 +554,13 @@ var User = exports.User = function () {
     value: function logout() {
       var options = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 
-      return this.getActiveUser(options.client).then(function (user) {
-        if (user) {
-          return user.logout(options);
-        }
+      var user = this.getActiveUser(options.client);
 
-        return null;
-      });
+      if (user) {
+        return user.logout(options);
+      }
+
+      return _es6Promise2.default.resolve(null);
     }
   }, {
     key: 'signup',
@@ -594,24 +577,24 @@ var User = exports.User = function () {
   }, {
     key: 'update',
     value: function update(data, options) {
-      return User.getActiveUser(options.client).then(function (user) {
-        if (user) {
-          return user.update(data, options);
-        }
+      var user = this.getActiveUser(options.client);
 
-        return null;
-      });
+      if (user) {
+        return user.update(data, options);
+      }
+
+      return _es6Promise2.default.resolve(null);
     }
   }, {
     key: 'me',
     value: function me(options) {
-      return User.getActiveUser(options.client).then(function (user) {
-        if (user) {
-          return user.me(options);
-        }
+      var user = this.getActiveUser(options.client);
 
-        return null;
-      });
+      if (user) {
+        return user.me(options);
+      }
+
+      return _es6Promise2.default.resolve(null);
     }
   }, {
     key: 'verifyEmail',

@@ -34,7 +34,7 @@ function nested(obj, dotProperty, value) {
 }
 
 function isDefined(obj) {
-  return obj !== undefined && obj !== null;
+  return typeof obj !== 'undefined' && obj !== null;
 }
 
 function use(nsInterface) {

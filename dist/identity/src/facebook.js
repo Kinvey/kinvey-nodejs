@@ -84,8 +84,13 @@ var Facebook = exports.Facebook = function (_Identity) {
         var redirectUri = options.redirectUri || global.location.href;
         var originalState = (0, _utils.randomString)();
         var Popup = _this2.client.popupClass;
-        var popup = new Popup();
         var redirected = false;
+
+        if (!Popup) {
+          return reject(new _errors.KinveyError('Popup is undefined. Unable to connect to Facebook.'));
+        }
+
+        var popup = new Popup();
 
         var oauthCallback = function oauthCallback(urlString) {
           var _url$parse = _url2.default.parse(urlString);
@@ -181,6 +186,7 @@ var Facebook = exports.Facebook = function (_Identity) {
             state: originalState
           }
         }));
+        return popup;
       });
 
       return promise;

@@ -36,16 +36,8 @@ var HttpMiddleware = function (_Middleware) {
   _createClass(HttpMiddleware, [{
     key: 'handle',
     value: function handle(request, response) {
-      if (!this.adapter) {
-        return Promise.reject(new Error('Unable to handle the request. A http adapter is not specified.'));
-      }
-
-      return this.adapter.handle(request, response);
-    }
-  }, {
-    key: 'adapter',
-    get: function get() {
-      return _network2.default;
+      var http = new _network2.default();
+      return http.handle(request, response);
     }
   }]);
 
