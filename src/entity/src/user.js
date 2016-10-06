@@ -164,7 +164,7 @@ export class User {
    * @return {boolean} True the user is the active user otherwise false.
    */
   isActive() {
-    return User.getActiveUser(this.client)
+    return CacheRequest.getActiveUser(this.client)
       .then((activeUser) => {
         if (activeUser && activeUser[idAttribute] === this[idAttribute]) {
           return true;
@@ -192,14 +192,22 @@ export class User {
    * @return {?User} The active user.
    */
   static getActiveUser(client = Client.sharedInstance()) {
-    return CacheRequest.getActiveUser(client)
-      .then((data) => {
-        if (data) {
-          return new this(data, { client: client });
-        }
+    const data = CacheRequest.getActiveUserLegacy(client);
 
-        return null;
-      });
+    if (data) {
+      return new this(data, { client: client });
+    }
+
+    return null;
+
+    // return CacheRequest.getActiveUser(client)
+    //   .then((data) => {
+    //     if (data) {
+    //       return new this(data, { client: client });
+    //     }
+
+    //     return null;
+    //   });
   }
 
   /**
@@ -228,7 +236,7 @@ export class User {
           throw new ActiveUserError('This user is already the active user.');
         }
 
-        return User.getActiveUser(this.client);
+        return CacheRequest.getActiveUser(this.client);
       })
       .then((activeUser) => {
         if (activeUser) {
@@ -310,7 +318,7 @@ export class User {
           throw new ActiveUserError('This user is already the active user.');
         }
 
-        return User.getActiveUser(this.client);
+        return CacheRequest.getActiveUser(this.client);
       })
       .then((activeUser) => {
         if (activeUser) {
@@ -586,14 +594,13 @@ export class User {
    * @return {Promise<User>} The user.
    */
   static logout(options = {}) {
-    return this.getActiveUser(options.client)
-      .then((user) => {
-        if (user) {
-          return user.logout(options);
-        }
+    const user = this.getActiveUser(options.client)
 
-        return null;
-      });
+    if (user) {
+      return user.logout(options);
+    }
+
+    return null;
   }
 
   /**
@@ -610,7 +617,7 @@ export class User {
       state: true
     }, options);
 
-    return User.getActiveUser(this.client)
+    return CacheRequest.getActiveUser(this.client)
       .then((activeUser) => {
         if (options.state === true && activeUser) {
           throw new ActiveUserError('An active user already exists. Please logout the active user before you login.');
@@ -732,14 +739,13 @@ export class User {
    * @return {Promise<User>} The user.
    */
   static update(data, options) {
-    return User.getActiveUser(options.client)
-      .then((user) => {
-        if (user) {
-          return user.update(data, options);
-        }
+    const user = this.getActiveUser(options.client);
 
-        return null;
-      });
+    if (user) {
+      return user.update(data, options);
+    }
+
+    return null;
   }
 
   /**
@@ -765,10 +771,10 @@ export class User {
       .then(response => response.data)
       .then((data) => {
         if (!data[kmdAttribute].authtoken) {
-          return User.getActiveUser(this.client)
+          return CacheRequest.getActiveUser(this.client)
             .then((activeUser) => {
               if (activeUser) {
-                data[kmdAttribute].authtoken = activeUser.authtoken;
+                data[kmdAttribute].authtoken = activeUser[kmdAttribute].authtoken;
               }
 
               return data;
@@ -795,14 +801,13 @@ export class User {
    * @return {Promise<User>} The user.
    */
   static me(options) {
-    return User.getActiveUser(options.client)
-      .then((user) => {
-        if (user) {
-          return user.me(options);
-        }
+    const user = this.getActiveUser(options.client);
 
-        return null;
-      });
+    if (user) {
+      return user.me(options);
+    }
+
+    return null;
   }
 
   /**

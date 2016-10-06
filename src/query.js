@@ -664,7 +664,12 @@ export class Query {
       this.filter[field] = {};
     }
 
-    if (condition && values) {
+    if (
+      condition !== undefined
+      && condition !== null
+      && values !== undefined
+      && values !== null
+    ) {
       this.filter[field][condition] = values;
     } else {
       this.filter[field] = condition;

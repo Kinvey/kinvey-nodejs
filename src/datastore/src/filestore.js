@@ -82,7 +82,8 @@ export class FileStore extends NetworkStore {
       options.query.ttl_in_seconds = options.ttl;
     }
 
-    return super.find(query, options).toPromise()
+    return super.find(query, options)
+      .toPromise()
       .then((files) => {
         if (options.download === true) {
           return Promise.all(map(files, file => this.downloadByUrl(file._downloadURL, options)));
@@ -126,7 +127,8 @@ export class FileStore extends NetworkStore {
       options.query.ttl_in_seconds = options.ttl;
     }
 
-    return super.findById(name, options).toPromise()
+    return super.findById(name, options)
+      .toPromise()
       .then((file) => {
         if (options.stream === true) {
           return file;

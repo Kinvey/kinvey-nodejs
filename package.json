@@ -45,29 +45,33 @@
     "del-cli": "^0.2.0",
     "es6-error": "^3.0.0",
     "es6-promise": "^4.0.4",
-    "esdoc": "^0.4.7",
-    "esdoc-es7-plugin": "0.0.3",
     "eslint": "^3.5.0",
     "eslint-config-airbnb-base": "^7.1.0",
     "eslint-plugin-import": "^1.15.0",
-    "expect": "^1.20.2",
     "fast-memory-cache": "^2.0.4",
     "hellojs": "^1.13.1",
-    "istanbul": "^1.0.0-alpha.2",
     "json-loader": "^0.5.4",
     "local-storage": "^1.4.2",
-    "lodash": "^4.16.0",
     "loglevel": "^1.4.1",
-    "mocha": "^3.0.0",
-    "nock": "^8.0.0",
     "promise-queue": "^2.2.3",
     "qs": "^6.2.0",
-    "regenerator-runtime": "^0.9.5",
     "rxjs": "^5.0.0-beta.7",
     "sift": "^3.0.0",
     "superagent": "^2.3.0",
     "uid": "0.0.2",
     "url-pattern": "^1.0.0"
+  },
+  "peerDependencies": {
+    "lodash": "^4.16.0"
+  },
+  "devDependencies": {
+    "esdoc": "^0.4.7",
+    "esdoc-es7-plugin": "0.0.3",
+    "expect": "^1.20.2",
+    "istanbul": "^1.0.0-alpha.2",
+    "mocha": "^3.0.0",
+    "nock": "^8.0.0",
+    "regenerator-runtime": "^0.9.5"
   },
   "engines": {
     "node": ">=4.0"

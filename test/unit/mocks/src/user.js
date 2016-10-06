@@ -4,14 +4,13 @@ import nock from 'nock';
 
 export default class TestUser extends User {
   static getActiveUser(client) {
-    return super.getActiveUser(client)
-      .then((user) => {
-        if (user) {
-          return new TestUser(user.data);
-        }
+    const user = super.getActiveUser(client);
 
-        return null;
-      });
+    if (user) {
+      return new TestUser(user.data);
+    }
+
+    return null;
   }
 
   login(username, password, options) {

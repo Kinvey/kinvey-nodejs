@@ -189,6 +189,7 @@ export default class KinveyRequest extends NetworkRequest {
       headers.set('X-Kinvey-Api-Version', defaultApiVersion);
     }
 
+
     // Add or remove the X-Kinvey-Skip-Business-Logic header
     if (this.skipBL === true) {
       headers.set('X-Kinvey-Skip-Business-Logic', true);
@@ -235,8 +236,8 @@ export default class KinveyRequest extends NetworkRequest {
     }
 
     // Add the X-Kinvey-Device-Information header
-    if (this.client.device && isFunction(this.client.device, 'toString')) {
-      headers.set('X-Kinvey-Device-Information', this.client.device.toString());
+    if (typeof this.client.deviceClass !== 'undefined' && isFunction(this.client.deviceClass, 'toString')) {
+      headers.set('X-Kinvey-Device-Information', this.client.deviceClass.toString());
     } else {
       headers.remove('X-Kinvey-Device-Information');
     }
@@ -315,7 +316,7 @@ export default class KinveyRequest extends NetworkRequest {
     return promise
       .then((authInfo) => {
         // Add the auth info to the Authorization header
-        if (authInfo) {
+        if (authInfo !== undefined || authInfo !== null) {
           let credentials = authInfo.credentials;
 
           if (authInfo.username) {
@@ -332,7 +333,7 @@ export default class KinveyRequest extends NetworkRequest {
   execute(rawResponse = false, retries = 0) {
     return this.getAuthorizationHeader()
       .then((authorizationHeader) => {
-        if (authorizationHeader) {
+        if (authorizationHeader !== undefined || authorizationHeader !== null) {
           this.headers.set('Authorization', authorizationHeader);
         } else {
           this.headers.remove('Authorization');
