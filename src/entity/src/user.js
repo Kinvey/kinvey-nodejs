@@ -164,14 +164,13 @@ export class User {
    * @return {boolean} True the user is the active user otherwise false.
    */
   isActive() {
-    return CacheRequest.getActiveUser(this.client)
-      .then((activeUser) => {
-        if (activeUser && activeUser[idAttribute] === this[idAttribute]) {
-          return true;
-        }
+    const activeUser = User.getActiveUser(this.client);
 
-        return false;
-      });
+    if (activeUser && activeUser[idAttribute] === this[idAttribute]) {
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -230,54 +229,48 @@ export class User {
       };
     }
 
-    return this.isActive()
-      .then((isActive) => {
-        if (isActive) {
-          throw new ActiveUserError('This user is already the active user.');
-        }
+    if (this.isActive()) {
+      return Promise.reject(new ActiveUserError('This user is already the active user.'));
+    }
 
-        return CacheRequest.getActiveUser(this.client);
-      })
-      .then((activeUser) => {
-        if (activeUser) {
-          throw new ActiveUserError('An active user already exists. Please logout the active user before you login.');
-        }
+    if (User.getActiveUser(this.client)) {
+      return Promise.reject(new ActiveUserError('An active user already exists. Please logout the active user before you login.'));
+    }
 
-        if (!credentials[socialIdentityAttribute]) {
-          if (credentials.username) {
-            credentials.username = String(credentials.username).trim();
-          }
+    if (!credentials[socialIdentityAttribute]) {
+      if (credentials.username) {
+        credentials.username = String(credentials.username).trim();
+      }
 
-          if (credentials.password) {
-            credentials.password = String(credentials.password).trim();
-          }
-        }
+      if (credentials.password) {
+        credentials.password = String(credentials.password).trim();
+      }
+    }
 
-        if ((!credentials.username
-            || credentials.username === ''
-            || !credentials.password
-            || credentials.password === ''
-          ) && !credentials[socialIdentityAttribute]) {
-          throw new KinveyError(
-            'Username and/or password missing. Please provide both a username and password to login.'
-          );
-        }
+    if ((!credentials.username
+        || credentials.username === ''
+        || !credentials.password
+        || credentials.password === ''
+      ) && !credentials[socialIdentityAttribute]) {
+      return Promise.reject(new KinveyError(
+        'Username and/or password missing. Please provide both a username and password to login.'
+      ));
+    }
 
-        const request = new KinveyRequest({
-          method: RequestMethod.POST,
-          authType: AuthType.App,
-          url: url.format({
-            protocol: this.client.apiProtocol,
-            host: this.client.apiHost,
-            pathname: `${this.pathname}/login`
-          }),
-          body: credentials,
-          properties: options.properties,
-          timeout: options.timeout,
-          client: this.client
-        });
-        return request.execute();
-      })
+    const request = new KinveyRequest({
+      method: RequestMethod.POST,
+      authType: AuthType.App,
+      url: url.format({
+        protocol: this.client.apiProtocol,
+        host: this.client.apiHost,
+        pathname: `${this.pathname}/login`
+      }),
+      body: credentials,
+      properties: options.properties,
+      timeout: options.timeout,
+      client: this.client
+    });
+    return request.execute()
       .then(response => response.data)
       .then((data) => {
         if (credentials[socialIdentityAttribute]) {
@@ -285,7 +278,7 @@ export class User {
         }
 
         this.data = data;
-        return CacheRequest.setActiveUser(this.client, this.data);
+        CacheRequest.setActiveUserLegacy(this.client, this.data);
       })
       .then(() => this);
   }
@@ -312,22 +305,16 @@ export class User {
    * @return {Promise<User>} The user.
    */
   loginWithMIC(redirectUri, authorizationGrant, options = {}) {
-    return this.isActive()
-      .then((isActive) => {
-        if (isActive) {
-          throw new ActiveUserError('This user is already the active user.');
-        }
+    if (this.isActive()) {
+      return Promise.reject(new ActiveUserError('This user is already the active user.'));
+    }
 
-        return CacheRequest.getActiveUser(this.client);
-      })
-      .then((activeUser) => {
-        if (activeUser) {
-          throw new ActiveUserError('An active user already exists. Please logout the active user before you login.');
-        }
+    if (User.getActiveUser(this.client)) {
+      return Promise.reject(new ActiveUserError('An active user already exists. Please logout the active user before you login.'));
+    }
 
-        const mic = new MobileIdentityConnect({ client: this.client });
-        return mic.login(redirectUri, authorizationGrant, options);
-      })
+    const mic = new MobileIdentityConnect({ client: this.client });
+    return mic.login(redirectUri, authorizationGrant, options)
       .then(session => this.connectIdentity(MobileIdentityConnect.identity, session, options));
   }
 
@@ -353,25 +340,22 @@ export class User {
    * @return {Promise<User>} The user.
    */
   connectIdentity(identity, session, options) {
-    return this.isActive()
-      .then((isActive) => {
-        const data = {};
-        const socialIdentity = data[socialIdentityAttribute] || {};
-        socialIdentity[identity] = session;
-        data[socialIdentityAttribute] = socialIdentity;
+    const data = {};
+    const socialIdentity = data[socialIdentityAttribute] || {};
+    socialIdentity[identity] = session;
+    data[socialIdentityAttribute] = socialIdentity;
 
-        if (isActive) {
-          return this.update(data, options);
+    if (this.isActive()) {
+      return this.update(data, options);
+    }
+
+    return this.login(data, options)
+      .catch((error) => {
+        if (error instanceof NotFoundError) {
+          return this.signup(data, options).then(() => this.connectIdentity(identity, session, options));
         }
 
-        return this.login(data, options)
-          .catch((error) => {
-            if (error instanceof NotFoundError) {
-              return this.signup(data, options).then(() => this.connectIdentity(identity, session, options));
-            }
-
-            throw error;
-          });
+        throw error;
       });
   }
 
@@ -576,7 +560,7 @@ export class User {
         Log.error(error);
       })
       .then(() => {
-        return CacheRequest.setActiveUser(this.client, null);
+        return CacheRequest.setActiveUserLegacy(this.client, null);
       })
       .then(() => {
         return DataStore.clearCache({ client: this.client });
@@ -594,13 +578,13 @@ export class User {
    * @return {Promise<User>} The user.
    */
   static logout(options = {}) {
-    const user = this.getActiveUser(options.client)
+    const user = this.getActiveUser(options.client);
 
     if (user) {
       return user.logout(options);
     }
 
-    return null;
+    return Promise.resolve(null);
   }
 
   /**
@@ -617,38 +601,35 @@ export class User {
       state: true
     }, options);
 
-    return CacheRequest.getActiveUser(this.client)
-      .then((activeUser) => {
-        if (options.state === true && activeUser) {
-          throw new ActiveUserError('An active user already exists. Please logout the active user before you login.');
-        }
+    if (options.state === true && User.getActiveUser(this.client)) {
+      return Promise.reject(new ActiveUserError('An active user already exists. Please logout the active user before you login.'));
+    }
 
-        if (data instanceof User) {
-          data = data.data;
-        }
+    if (data instanceof User) {
+      data = data.data;
+    }
 
-        const request = new KinveyRequest({
-          method: RequestMethod.POST,
-          authType: AuthType.App,
-          url: url.format({
-            protocol: this.client.protocol,
-            host: this.client.host,
-            pathname: this.pathname
-          }),
-          body: isEmpty(data) ? null : data,
-          properties: options.properties,
-          timeout: options.timeout,
-          client: this.client
-        });
+    const request = new KinveyRequest({
+      method: RequestMethod.POST,
+      authType: AuthType.App,
+      url: url.format({
+        protocol: this.client.protocol,
+        host: this.client.host,
+        pathname: this.pathname
+      }),
+      body: isEmpty(data) ? null : data,
+      properties: options.properties,
+      timeout: options.timeout,
+      client: this.client
+    });
 
-        return request.execute();
-      })
+    return request.execute()
       .then(response => response.data)
       .then((data) => {
         this.data = data;
 
         if (options.state === true) {
-          return CacheRequest.setActiveUser(this.client, this.data);
+          return CacheRequest.setActiveUserLegacy(this.client, this.data);
         }
 
         return this;
@@ -721,7 +702,7 @@ export class User {
       })
       .then((isActive) => {
         if (isActive) {
-          return CacheRequest.setActiveUser(this.client, this.data);
+          return CacheRequest.setActiveUserLegacy(this.client, this.data);
         }
 
         return this;
@@ -745,7 +726,7 @@ export class User {
       return user.update(data, options);
     }
 
-    return null;
+    return Promise.resolve(null);
   }
 
   /**
@@ -771,23 +752,20 @@ export class User {
       .then(response => response.data)
       .then((data) => {
         if (!data[kmdAttribute].authtoken) {
-          return CacheRequest.getActiveUser(this.client)
-            .then((activeUser) => {
-              if (activeUser) {
-                data[kmdAttribute].authtoken = activeUser[kmdAttribute].authtoken;
-              }
+          const activeUser = User.getActiveUser(this.client);
 
-              return data;
-            });
+          if (activeUser) {
+            data[kmdAttribute].authtoken = activeUser.authtoken;
+          }
+
+          return data;
         }
 
         return data;
       })
       .then((data) => {
-        return CacheRequest.setActiveUser(this.client, data)
-          .then(() => {
-            this.data = data;
-          });
+        CacheRequest.setActiveUserLegacy(this.client, data);
+        this.data = data;
       })
       .then(() => {
         return this;
@@ -807,7 +785,7 @@ export class User {
       return user.me(options);
     }
 
-    return null;
+    return Promise.resolve(null);
   }
 
   /**
