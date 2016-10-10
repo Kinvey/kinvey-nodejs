@@ -1,6 +1,6 @@
 import { Client } from '../../client';
-import { Acl } from './acl';
-import { Metadata } from './metadata';
+import Acl from './acl';
+import Metadata from './metadata';
 import { AuthType, RequestMethod, KinveyRequest, CacheRequest } from '../../request';
 import { KinveyError, NotFoundError, ActiveUserError } from '../../errors';
 import DataStore, { UserStore } from '../../datastore';
@@ -25,7 +25,7 @@ const emailAttribute = process.env.KINVEY_EMAIL_ATTRIBUTE || 'email';
  * The User class is used to represent a single user on the Kinvey platform.
  * Use the user class to manage the active user lifecycle and perform user operations.
  */
-export class User {
+export default class User {
   /**
    * Create a new instance of a User.
    *
