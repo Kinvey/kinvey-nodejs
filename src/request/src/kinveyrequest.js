@@ -3,7 +3,7 @@ import CacheRequest from './cacherequest';
 import Headers from './headers';
 import NetworkRequest from './networkrequest';
 import KinveyResponse from './kinveyresponse';
-import { InvalidCredentialsError, InsufficientCredentialsError, NoActiveUserError } from '../../errors';
+import { InvalidCredentialsError, NoActiveUserError } from '../../errors';
 import { SocialIdentity } from '../../identity';
 import Promise from 'es6-promise';
 import url from 'url';
@@ -17,7 +17,6 @@ const tokenPathname = process.env.KINVEY_MIC_TOKEN_PATHNAME || '/oauth/token';
 const usersNamespace = process.env.KINVEY_USERS_NAMESPACE || 'user';
 const defaultApiVersion = process.env.KINVEY_DEFAULT_API_VERSION || 4;
 const customPropertiesMaxBytesAllowed = process.env.KINVEY_MAX_HEADER_BYTES || 2000;
-const MAX_RETRIES = process.env.KINVEY_REQUEST_MAX_RETRIES || 1;
 
 /**
  * @private
@@ -329,7 +328,7 @@ export default class KinveyRequest extends NetworkRequest {
       });
   }
 
-  execute(rawResponse = false, retries = 0) {
+  execute(rawResponse = false, retry = true) {
     return this.getAuthorizationHeader()
       .then((authorizationHeader) => {
         if (authorizationHeader !== undefined || authorizationHeader !== null) {
@@ -357,10 +356,7 @@ export default class KinveyRequest extends NetworkRequest {
         return response;
       })
       .catch((error) => {
-        if (
-          (error instanceof InvalidCredentialsError || error instanceof InsufficientCredentialsError)
-          && retries < MAX_RETRIES
-        ) {
+        if (error instanceof InvalidCredentialsError && retry) {
           const user = CacheRequest.getActiveUserLegacy(this.client);
 
           if (!user) {
@@ -427,7 +423,7 @@ export default class KinveyRequest extends NetworkRequest {
                   return CacheRequest.setActiveUserLegacy(this.client, user);
                 })
                 .then(() => {
-                  return this.execute(rawResponse, retries + 1);
+                  return this.execute(rawResponse, false);
                 });
             }
           }
