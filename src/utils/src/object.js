@@ -1,5 +1,7 @@
 import forEach from 'lodash/forEach';
 import isFunction from 'lodash/isFunction';
+import isNull from 'lodash/isNull';
+import isUndefined from 'lodash/isUndefined';
 
 /**
  * @private
@@ -24,7 +26,7 @@ export function nested(obj, dotProperty, value) {
  * @private
  */
 export function isDefined(obj) {
-  return typeof obj !== 'undefined' && obj !== null;
+  return !isUndefined(obj) && !isNull(obj);
 }
 
 /**
