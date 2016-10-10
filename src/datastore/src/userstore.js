@@ -6,7 +6,6 @@ import url from 'url';
 import isArray from 'lodash/isArray';
 const usersNamespace = process.env.KINVEY_USERS_NAMESPACE || 'user';
 const rpcNamespace = process.env.KINVEY_RPC_NAMESPACE || 'rpc';
-const idAttribute = process.env.KINVEY_ID_ATTRIBUTE || '_id';
 
 /**
  * The UserStore class is used to find, save, update, remove, count and group users.
@@ -51,7 +50,7 @@ export class UserStore extends NetworkStore {
       return Promise.reject(new KinveyError('Only one user can be updated at one time.', data));
     }
 
-    if (!data[idAttribute]) {
+    if (!data._id) {
       return Promise.ject(new KinveyError('User must have an _id.'));
     }
 

@@ -15,7 +15,6 @@ import map from 'lodash/map';
 import assign from 'lodash/assign';
 import isFunction from 'lodash/isFunction';
 import isNumber from 'lodash/isNumber';
-const idAttribute = process.env.KINVEY_ID_ATTRIBUTE || '_id';
 const filesNamespace = process.env.KINVEY_FILES_NAMESPACE || 'blob';
 const MAX_BACKOFF = process.env.KINVEY_MAX_BACKOFF || 32 * 1000;
 
@@ -223,7 +222,7 @@ export class FileStore extends NetworkStore {
 
     // If the file metadata contains an _id then
     // update the file
-    if (metadata[idAttribute]) {
+    if (metadata._id) {
       request.method = RequestMethod.PUT;
       request.url = url.format({
         protocol: this.client.protocol,

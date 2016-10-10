@@ -13,7 +13,6 @@ import filter from 'lodash/filter';
 import map from 'lodash/map';
 import xorWith from 'lodash/xorWith';
 import isArray from 'lodash/isArray';
-const idAttribute = process.env.KINVEY_ID_ATTRIBUTE || '_id';
 
 /**
  * The CacheStore class is used to find, create, update, remove, count and group entities. Entities are stored
@@ -106,9 +105,9 @@ export class CacheStore extends NetworkStore {
               })
               .then((networkEntities) => {
                 // Remove entities from the cache that no longer exists
-                const removedEntities = differenceBy(cacheEntities, networkEntities, idAttribute);
-                const removedIds = Object.keys(keyBy(removedEntities, idAttribute));
-                const removeQuery = new Query().contains(idAttribute, removedIds);
+                const removedEntities = differenceBy(cacheEntities, networkEntities, '_id');
+                const removedIds = Object.keys(keyBy(removedEntities, '_id'));
+                const removeQuery = new Query().contains('_id', removedIds);
                 return this.clear(removeQuery, options)
                   .then(() => networkEntities);
               })
@@ -350,7 +349,7 @@ export class CacheStore extends NetworkStore {
         .then((data) => {
           // Push the data
           if (this.syncAutomatically === true) {
-            const ids = Object.keys(keyBy(data, idAttribute));
+            const ids = Object.keys(keyBy(data, '_id'));
             const query = new Query().contains('entityId', ids);
             return this.push(query, options)
               .then((results) => {
@@ -417,7 +416,7 @@ export class CacheStore extends NetworkStore {
         .then((data) => {
           // Push the data
           if (this.syncAutomatically === true) {
-            const ids = Object.keys(keyBy(data, idAttribute));
+            const ids = Object.keys(keyBy(data, '_id'));
             const query = new Query().contains('entityId', ids);
             return this.push(query, options)
               .then((results) => {
@@ -497,12 +496,12 @@ export class CacheStore extends NetworkStore {
               const metadata = new Metadata(entity);
               return metadata.isLocal();
             });
-            const query = new Query().contains('entityId', Object.keys(keyBy(localEntities, idAttribute)));
+            const query = new Query().contains('entityId', Object.keys(keyBy(localEntities, '_id')));
             return this.clearSync(query, options)
               .then(() => {
                 // Create delete operations for non local data in the sync table
                 const syncEntities = xorWith(entities, localEntities,
-                  (entity, localEntity) => entity[idAttribute] === localEntity[idAttribute]);
+                  (entity, localEntity) => entity._id === localEntity._id);
                 return this.syncManager.addDeleteOperation(syncEntities, options);
               })
               .then(() => entities);
@@ -513,7 +512,7 @@ export class CacheStore extends NetworkStore {
         .then((entities) => {
           // Push the data
           if (this.syncAutomatically === true) {
-            const ids = Object.keys(keyBy(entities, idAttribute));
+            const ids = Object.keys(keyBy(entities, '_id'));
             const query = new Query().contains('entityId', ids);
             return this.push(query, options)
               .then(() => entities);
@@ -566,7 +565,7 @@ export class CacheStore extends NetworkStore {
             // was created locally
             if (metadata.isLocal()) {
               const query = new Query();
-              query.equalTo('entityId', entity[idAttribute]);
+              query.equalTo('entityId', entity._id);
               return this.clearSync(query, options)
                 .then(() => entity);
             }
@@ -581,7 +580,7 @@ export class CacheStore extends NetworkStore {
         .then((entity) => {
           // Push the data
           if (this.syncAutomatically === true) {
-            const query = new Query().equalTo('entityId', entity[idAttribute]);
+            const query = new Query().equalTo('entityId', entity._id);
             return this.push(query, options)
               .then(() => entity);
           }
@@ -651,7 +650,7 @@ export class CacheStore extends NetworkStore {
         .then((entities) => {
           if (entities && entities.length > 0) {
             // Clear entities from the sync table
-            const query = new Query().contains('entityId', Object.keys(keyBy(entities, idAttribute)));
+            const query = new Query().contains('entityId', Object.keys(keyBy(entities, '_id')));
             return this.clearSync(query, options)
               .then(() => entities);
           }

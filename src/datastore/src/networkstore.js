@@ -8,7 +8,6 @@ import isString from 'lodash/isString';
 import url from 'url';
 import map from 'lodash/map';
 import isArray from 'lodash/isArray';
-const idAttribute = process.env.KINVEY_ID_ATTRIBUTE || '_id';
 const appdataNamespace = process.env.KINVEY_DATASTORE_NAMESPACE || 'appdata';
 
 /**
@@ -266,22 +265,22 @@ export class NetworkStore {
    * @param   {Number}                [options.timeout]                 Timeout for the request.
    * @return  {Promise}                                                 Promise.
    */
-  create(data, options = {}) {
+  create(entities, options = {}) {
     const stream = KinveyObservable.create((observer) => {
       try {
-        if (!data) {
+        if (!entities) {
           observer.next(null);
           return observer.compelete();
         }
 
         let singular = false;
 
-        if (!isArray(data)) {
+        if (!isArray(entities)) {
           singular = true;
-          data = [data];
+          entities = [entities];
         }
 
-        return Promise.all(map(data, (entity) => {
+        return Promise.all(map(entities, (entity) => {
           const request = new KinveyRequest({
             method: RequestMethod.POST,
             authType: AuthType.Default,
@@ -320,29 +319,29 @@ export class NetworkStore {
    * @param   {Number}                [options.timeout]                 Timeout for the request.
    * @return  {Promise}                                                 Promise.
    */
-  update(data, options = {}) {
+  update(entities, options = {}) {
     const stream = KinveyObservable.create((observer) => {
       try {
-        if (!data) {
+        if (!entities) {
           observer.next(null);
           return observer.compelete();
         }
 
         let singular = false;
 
-        if (!isArray(data)) {
+        if (!isArray(entities)) {
           singular = true;
-          data = [data];
+          entities = [entities];
         }
 
-        return Promise.all(map(data, (entity) => {
+        return Promise.all(map(entities, (entity) => {
           const request = new KinveyRequest({
             method: RequestMethod.PUT,
             authType: AuthType.Default,
             url: url.format({
               protocol: this.client.protocol,
               host: this.client.host,
-              pathname: `${this.pathname}/${entity[idAttribute]}`,
+              pathname: `${this.pathname}/${entity._id}`,
               query: options.query
             }),
             properties: options.properties,
@@ -374,12 +373,12 @@ export class NetworkStore {
    * @param   {Number}                [options.timeout]                 Timeout for the request.
    * @return  {Promise}                                                 Promise.
    */
-  save(data, options) {
-    if (data[idAttribute]) {
-      return this.update(data, options);
+  save(entity, options) {
+    if (entity._id) {
+      return this.update(entity, options);
     }
 
-    return this.create(data, options);
+    return this.create(entity, options);
   }
 
   /**
