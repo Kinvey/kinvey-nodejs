@@ -4,8 +4,6 @@ import Promise from 'es6-promise';
 import Queue from 'promise-queue';
 import isString from 'lodash/isString';
 import isArray from 'lodash/isArray';
-const idAttribute = process.env.KINVEY_ID_ATTRIBUTE || '_id';
-const kmdAttribute = process.env.KINVEY_KMD_ATTRIBUTE || '_kmd';
 Queue.configure(Promise);
 const queue = new Queue(1, Infinity);
 
@@ -35,7 +33,7 @@ export default class Storage {
       return new Memory(this.name);
     }
 
-    return null;
+    throw new Error('No storage adapter is available.');
   }
 
   generateObjectId(length = 24) {
@@ -98,16 +96,16 @@ export default class Storage {
       }
 
       entities = entities.map((entity) => {
-        let id = entity[idAttribute];
-        const kmd = entity[kmdAttribute] || {};
+        let id = entity._id;
+        const kmd = entity._kmd || {};
 
         if (!id) {
           id = this.generateObjectId();
           kmd.local = true;
         }
 
-        entity[idAttribute] = id;
-        entity[kmdAttribute] = kmd;
+        entity._id = id;
+        entity._kmd = kmd;
         return entity;
       });
 
@@ -123,7 +121,13 @@ export default class Storage {
   }
 
   remove(collection, entities = []) {
-    return Promise.all(entities.map(entity => this.removeById(collection, entity[idAttribute])))
+    return Promise.all(entities.map((entity) => {
+      if (typeof entity._id === 'undefined') {
+        return Promise.reject('Unable to remove an entity because it does not have _id.');
+      }
+
+      return this.removeById(collection, entity._id);
+    }))
       .then((responses) => {
         return responses.reduce((entities, entity) => {
           entities.push(entity);
@@ -134,12 +138,8 @@ export default class Storage {
 
   removeById(collection, id) {
     return queue.add(() => {
-      if (!id) {
-        return Promise.resolve(undefined);
-      }
-
       if (!isString(id)) {
-        return Promise.resolve(new Error('id must be a string', id));
+        return Promise.reject(new Error('id must be a string', id));
       }
 
       return this.adapter.removeById(collection, id);
