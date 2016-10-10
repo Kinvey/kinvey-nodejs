@@ -10,6 +10,10 @@ export default class Middleware {
     return Promise.reject(new Error('A subclass middleware must override the handle function.'));
   }
 
+  cancel() {
+    return Promise.resolve();
+  }
+
   generateTree(level = 0) {
     const root = {
       value: this.name,
