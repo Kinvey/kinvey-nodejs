@@ -46,6 +46,10 @@ export default class Rack extends Middleware {
       }),
       Promise.resolve({ request: req }))
       .then(({ response }) => {
+        if (this.canceled === true) {
+          return Promise.reject(new Error('Cancelled'));
+        }
+
         this.canceled = false;
         this.activeMiddleware = undefined;
         return response;
