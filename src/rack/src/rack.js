@@ -4,24 +4,15 @@ import HttpMiddleware from './http';
 import ParseMiddleware from './parse';
 import SerializeMiddleware from './serialize';
 import Promise from 'es6-promise';
-import findIndex from 'lodash/findIndex';
 import reduce from 'lodash/reduce';
+import isFunction from 'lodash/isFunction';
 
 export default class Rack extends Middleware {
   constructor(name = 'Rack') {
     super(name);
     this.middlewares = [];
     this.canceled = false;
-  }
-
-  getMiddleware(index = -1) {
-    const middlewares = this.middlewares;
-
-    if (index < -1 || index >= middlewares.length) {
-      throw new Error(`Index ${index} is out of bounds.`);
-    }
-
-    return middlewares[index];
+    this.activeMiddleware = undefined;
   }
 
   use(middleware) {
@@ -35,88 +26,45 @@ export default class Rack extends Middleware {
     }
   }
 
-  useBefore(middlewareClass, middleware) {
-    if (middleware) {
-      if (middleware instanceof Middleware) {
-        const middlewares = this.middlewares;
-        const index = findIndex(middlewares, existingMiddleware => existingMiddleware instanceof middlewareClass);
-
-        if (index > -1) {
-          middlewares.splice(index, 0, middleware);
-          this.middlewares = middlewares;
-        }
-
-        return;
-      }
-
-      throw new Error('Unable to use the middleware. It must be an instance of Middleware.');
-    }
-  }
-
-  useAfter(middlewareClass, middleware) {
-    if (middleware) {
-      if (middleware instanceof Middleware) {
-        const middlewares = this.middlewares;
-        const index = findIndex(middlewares, existingMiddleware => existingMiddleware instanceof middlewareClass);
-
-        if (index > -1) {
-          middlewares.splice(index + 1, 0, middleware);
-          this.middlewares = middlewares;
-        }
-
-        return;
-      }
-
-      throw new Error('Unable to use the middleware. It must be an instance of Middleware.');
-    }
-  }
-
-  swap(middlewareClass, middleware) {
-    if (middleware) {
-      if (middleware instanceof Middleware) {
-        const middlewares = this.middlewares;
-        const index = findIndex(middlewares, existingMiddleware => existingMiddleware instanceof middlewareClass);
-
-        if (index > -1) {
-          middlewares.splice(index, 1, middleware);
-          this.middlewares = middlewares;
-        }
-
-        return;
-      }
-
-      throw new Error('Unable to use the middleware. It must be an instance of Middleware.');
-    }
-  }
-
-  remove(middlewareClass) {
-    const middlewares = this.middlewares;
-    const index = findIndex(middlewares, existingMiddleware => existingMiddleware instanceof middlewareClass);
-
-    if (index > -1) {
-      middlewares.splice(index, 1);
-      this.middlewares = middlewares;
-      this.remove(middlewareClass);
-    }
-  }
-
   reset() {
     this.middlewares = [];
   }
 
   execute(req) {
-    if (!req) {
+    if (typeof req === 'undefined') {
       return Promise.reject(new Error('Request is undefined. Please provide a valid request.'));
     }
 
     return reduce(this.middlewares,
-      (promise, middleware) => promise.then(({ request, response }) => middleware.handle(request || req, response)),
+      (promise, middleware) => promise.then(({ request, response }) => {
+        if (this.canceled === true) {
+          return Promise.reject(new Error('Cancelled'));
+        }
+
+        this.activeMiddleware = middleware;
+        return middleware.handle(request || req, response);
+      }),
       Promise.resolve({ request: req }))
-      .then(({ response }) => response);
+      .then(({ response }) => {
+        this.canceled = false;
+        this.activeMiddleware = undefined;
+        return response;
+      })
+      .catch((error) => {
+        this.canceled = false;
+        this.activeMiddleware = undefined;
+        throw error;
+      });
   }
 
   cancel() {
     this.canceled = true;
+
+    if (typeof this.activeMiddleware !== 'undefined' && isFunction(this.activeMiddleware.cancel)) {
+      return this.activeMiddleware.cancel();
+    }
+
+    return Promise.resolve();
   }
 
   handle(request) {
