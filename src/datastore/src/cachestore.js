@@ -1,8 +1,8 @@
-import { NetworkStore } from './networkstore';
+import NetworkStore from './networkstore';
 import { CacheRequest, AuthType, RequestMethod } from '../../request';
 import { KinveyError } from '../../errors';
 import { Query } from '../../query';
-import { SyncManager } from './sync';
+import SyncManager from './sync';
 import { Metadata } from '../../entity';
 import { KinveyObservable } from '../../utils';
 import differenceBy from 'lodash/differenceBy';
@@ -18,7 +18,7 @@ import isArray from 'lodash/isArray';
  * The CacheStore class is used to find, create, update, remove, count and group entities. Entities are stored
  * in a cache and synced with the backend.
  */
-export class CacheStore extends NetworkStore {
+export default class CacheStore extends NetworkStore {
   constructor(collection, options = {}) {
     super(collection, options);
 

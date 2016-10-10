@@ -3,7 +3,7 @@ import { Acl } from './acl';
 import { Metadata } from './metadata';
 import { AuthType, RequestMethod, KinveyRequest, CacheRequest } from '../../request';
 import { KinveyError, NotFoundError, ActiveUserError } from '../../errors';
-import { DataStore, UserStore } from '../../datastore';
+import DataStore, { UserStore } from '../../datastore';
 import { Facebook, Google, LinkedIn, MobileIdentityConnect } from '../../identity';
 import { Log } from '../../utils';
 import Promise from 'es6-promise';

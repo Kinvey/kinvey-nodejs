@@ -32,7 +32,7 @@ export { SyncOperation };
 /**
  * @private
  */
-export class SyncManager {
+export default class SyncManager {
   constructor(collection, options = {}) {
     if (!collection) {
       throw new SyncError('A collection is required.');

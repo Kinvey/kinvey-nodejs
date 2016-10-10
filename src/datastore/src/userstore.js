@@ -1,6 +1,6 @@
 import { AuthType, RequestMethod, KinveyRequest } from '../../request';
 import { KinveyError } from '../../errors';
-import { NetworkStore } from './networkstore';
+import NetworkStore from './networkstore';
 import Promise from 'es6-promise';
 import url from 'url';
 import isArray from 'lodash/isArray';
@@ -10,7 +10,7 @@ const rpcNamespace = process.env.KINVEY_RPC_NAMESPACE || 'rpc';
 /**
  * The UserStore class is used to find, save, update, remove, count and group users.
  */
-export class UserStore extends NetworkStore {
+export default class UserStore extends NetworkStore {
   constructor(options) {
     super(null, options);
   }

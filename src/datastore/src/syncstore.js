@@ -1,4 +1,4 @@
-import { CacheStore } from './cachestore';
+import CacheStore from './cachestore';
 import { CacheRequest, RequestMethod } from '../../request';
 import { KinveyError } from '../../errors';
 import { Query } from '../../query';
@@ -9,7 +9,7 @@ import url from 'url';
  * The SyncStore class is used to find, create, update, remove, count and group entities. Entities are stored
  * in a cache and synced with the backend.
  */
-export class SyncStore extends CacheStore {
+export default class SyncStore extends CacheStore {
   get syncAutomatically() {
     return false;
   }

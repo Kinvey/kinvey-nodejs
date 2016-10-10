@@ -7,7 +7,7 @@ import {
   Headers
 } from '../../request';
 import { KinveyError } from '../../errors';
-import { NetworkStore } from './networkstore';
+import NetworkStore from './networkstore';
 import { Log } from '../../utils';
 import Promise from 'es6-promise';
 import url from 'url';
@@ -31,7 +31,7 @@ function getStartIndex(rangeHeader, max) {
 /**
  * The FileStore class is used to find, save, update, remove, count and group files.
  */
-export class FileStore extends NetworkStore {
+export default class FileStore extends NetworkStore {
   /**
    * @private
    * The pathname for the store.

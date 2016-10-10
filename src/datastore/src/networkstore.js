@@ -13,7 +13,7 @@ const appdataNamespace = process.env.KINVEY_DATASTORE_NAMESPACE || 'appdata';
 /**
  * The NetworkStore class is used to find, create, update, remove, count and group entities over the network.
  */
-export class NetworkStore {
+export default class NetworkStore {
   constructor(collection, options = {}) {
     if (collection && !isString(collection)) {
       throw new KinveyError('Collection must be a string.');

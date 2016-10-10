@@ -1,9 +1,9 @@
 import { CacheRequest, RequestMethod } from '../../request';
 import { KinveyError } from '../../errors';
 import { Client } from '../../client';
-import { NetworkStore } from './networkstore';
-import { CacheStore } from './cachestore';
-import { SyncStore } from './syncstore';
+import NetworkStore from './networkstore';
+import CacheStore from './cachestore';
+import SyncStore from './syncstore';
 import url from 'url';
 const appdataNamespace = process.env.KINVEY_DATASTORE_NAMESPACE || 'appdata';
 
@@ -24,7 +24,7 @@ export { DataStoreType };
 /**
  * The DataStore class is used to find, create, update, remove, count and group entities.
  */
-export class DataStore {
+export default class DataStore {
   constructor() {
     throw new KinveyError('Not allowed to construct a DataStore instance.'
       + ' Please use the collection() function to retrieve an instance of a DataStore instance.');
