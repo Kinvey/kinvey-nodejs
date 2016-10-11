@@ -7,7 +7,7 @@ import {
 } from '../../request';
 import { InsufficientCredentialsError, SyncError } from '../../errors';
 import { Client } from '../../client';
-import { Query } from '../../query';
+import Query from '../../query';
 import Promise from 'es6-promise';
 import url from 'url';
 import map from 'lodash/map';

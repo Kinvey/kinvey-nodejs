@@ -1,8 +1,8 @@
 import { Client } from './client';
 import { CustomEndpoint } from './endpoint';
-import { Query } from './query';
+import Query from './query';
 import { Log } from './utils';
-import { Aggregation } from './aggregation';
+import Aggregation from './aggregation';
 import DataStore, { DataStoreType, FileStore } from './datastore';
 import { Acl, Metadata, User, UserStore } from './entity';
 import { AuthorizationGrant, SocialIdentity } from './identity';

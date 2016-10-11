@@ -1,7 +1,8 @@
 import NetworkStore from './networkstore';
 import { CacheRequest, AuthType, RequestMethod } from '../../request';
 import { KinveyError } from '../../errors';
-import { Query } from '../../query';
+import Query from '../../query';
+import Aggregation from '../../aggregation';
 import SyncManager from './sync';
 import { Metadata } from '../../entity';
 import { KinveyObservable } from '../../utils';
@@ -223,6 +224,78 @@ export default class CacheStore extends NetworkStore {
         .catch(error => observer.error(error));
     });
 
+    return stream;
+  }
+
+  /**
+   * Group entities.
+   *
+   * @param   {Aggregation}           aggregation                         Aggregation used to group entities.
+   * @param   {Object}                [options]                           Options
+   * @param   {Properties}            [options.properties]                Custom properties to send with
+   *                                                                      the request.
+   * @param   {Number}                [options.timeout]                   Timeout for the request.
+   * @return  {Observable}                                                Observable.
+   */
+  group(aggregation, options = {}) {
+    options = assign({ syncAutomatically: this.syncAutomatically }, options);
+    const syncAutomatically = options.syncAutomatically === true;
+    const stream = KinveyObservable.create((observer) => {
+      // Check that the aggregation is valid
+      if (!(aggregation instanceof Aggregation)) {
+        return observer.error(new KinveyError('Invalid aggregation. It must be an instance of the Aggregation class.'));
+      }
+
+      // Fetch the cache entities
+      const request = new CacheRequest({
+        method: RequestMethod.GET,
+        url: url.format({
+          protocol: this.client.protocol,
+          host: this.client.host,
+          pathname: `${this.pathname}/_group`
+        }),
+        properties: options.properties,
+        aggregation: aggregation,
+        timeout: options.timeout
+      });
+
+      // Execute the request
+      return request.execute()
+        .then(response => response.data)
+        .catch(() => [])
+        .then((cacheResult = []) => {
+          observer.next(cacheResult);
+
+          if (syncAutomatically === true) {
+            // Attempt to push any pending sync data before fetching from the network.
+            return this.pendingSyncCount(null, options)
+              .then((syncCount) => {
+                if (syncCount > 0) {
+                  return this.push(null, options)
+                    .then(() => this.pendingSyncCount(null, options));
+                }
+
+                return syncCount;
+              })
+              .then((syncCount) => {
+                // Throw an error if there are still items that need to be synced
+                if (syncCount > 0) {
+                  throw new KinveyError('Unable to load data from the network.'
+                    + ` There are ${syncCount} entities that need`
+                    + ' to be synced before data is loaded from the network.');
+                }
+
+                // Group the network entities
+                return super.group(aggregation, options).toPromise();
+              });
+          }
+
+          return cacheResult;
+        })
+        .then(result => observer.next(result))
+        .then(() => observer.complete())
+        .catch(error => observer.error(error));
+    });
     return stream;
   }
 

@@ -21,7 +21,7 @@ const unsupportedFilters = ['$nearSphere'];
  * var query = new Kinvey.Query();
  * query.equalTo('name', 'Kinvey');
  */
-export class Query {
+export default class Query {
   /**
    * Create an instance of the Query class.
    *

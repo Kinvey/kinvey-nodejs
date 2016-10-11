@@ -4,6 +4,10 @@ import KinveyResponse from './kinveyresponse';
 import UrlPattern from 'url-pattern';
 import url from 'url';
 import localStorage from 'local-storage';
+import { KinveyError } from '../../errors';
+import Query from '../../query';
+import Aggregation from '../../aggregation';
+import { isDefined } from '../../utils';
 // const usersNamespace = process.env.KINVEY_USERS_NAMESPACE || 'user';
 // const activeUserCollectionName = process.env.KINVEY_USER_ACTIVE_COLLECTION_NAME || 'kinvey_active_user';
 
@@ -13,8 +17,33 @@ import localStorage from 'local-storage';
 export default class CacheRequest extends Request {
   constructor(options = {}) {
     super(options);
+    this.aggregation = options.aggregation;
     this.query = options.query;
     this.rack = this.client.cacheRack;
+  }
+
+  get query() {
+    return this._query;
+  }
+
+  set query(query) {
+    if (isDefined(query) && !(query instanceof Query)) {
+      throw new KinveyError('Invalid query. It must be an instance of the Query class.');
+    }
+
+    this._query = query;
+  }
+
+  get aggregation() {
+    return this._aggregation;
+  }
+
+  set aggregation(aggregation) {
+    if (isDefined(aggregation) && !(aggregation instanceof Aggregation)) {
+      throw new KinveyError('Invalid aggregation. It must be an instance of the Aggregation class.');
+    }
+
+    this._aggregation = aggregation;
   }
 
   get url() {
@@ -49,8 +78,13 @@ export default class CacheRequest extends Request {
         }
 
         // If a query was provided then process the data with the query
-        if (this.query) {
+        if (isDefined(this.query)) {
           response.data = this.query.process(response.data);
+        }
+
+        // If an aggregation was provided then process the data with the aggregation
+        if (isDefined(this.aggregation)) {
+          response.data = this.aggregation.process(response.data);
         }
 
         // Just return the response

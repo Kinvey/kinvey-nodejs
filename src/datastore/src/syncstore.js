@@ -1,7 +1,8 @@
 import CacheStore from './cachestore';
 import { CacheRequest, RequestMethod } from '../../request';
 import { KinveyError } from '../../errors';
-import { Query } from '../../query';
+import Query from '../../query';
+import Aggregation from '../../aggregation';
 import { KinveyObservable } from '../../utils';
 import url from 'url';
 
@@ -97,6 +98,46 @@ export default class SyncStore extends CacheStore {
       }
     });
 
+    return stream;
+  }
+
+  /**
+   * Group entities.
+   *
+   * @param   {Aggregation}           aggregation                         Aggregation used to group entities.
+   * @param   {Object}                [options]                           Options
+   * @param   {Properties}            [options.properties]                Custom properties to send with
+   *                                                                      the request.
+   * @param   {Number}                [options.timeout]                   Timeout for the request.
+   * @return  {Observable}                                                Observable.
+   */
+  group(aggregation, options = {}) {
+    const stream = KinveyObservable.create((observer) => {
+      // Check that the aggregation is valid
+      if (!(aggregation instanceof Aggregation)) {
+        return observer.error(new KinveyError('Invalid aggregation. It must be an instance of the Aggregation class.'));
+      }
+
+      // Fetch the cache entities
+      const request = new CacheRequest({
+        method: RequestMethod.GET,
+        url: url.format({
+          protocol: this.client.protocol,
+          host: this.client.host,
+          pathname: `${this.pathname}/_group`
+        }),
+        properties: options.properties,
+        aggregation: aggregation,
+        timeout: options.timeout
+      });
+
+      // Execute the request
+      return request.execute()
+        .then(response => response.data)
+        .then(result => observer.next(result))
+        .then(() => observer.complete())
+        .catch(error => observer.error(error));
+    });
     return stream;
   }
 

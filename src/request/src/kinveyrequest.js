@@ -3,7 +3,10 @@ import CacheRequest from './cacherequest';
 import Headers from './headers';
 import NetworkRequest from './networkrequest';
 import KinveyResponse from './kinveyresponse';
-import { InvalidCredentialsError, NoActiveUserError } from '../../errors';
+import Query from '../../query';
+import Aggregation from '../../aggregation';
+import { isDefined } from '../../utils';
+import { InvalidCredentialsError, NoActiveUserError, KinveyError } from '../../errors';
 import { SocialIdentity } from '../../identity';
 import Promise from 'es6-promise';
 import url from 'url';
@@ -114,7 +117,9 @@ const Auth = {
     const activeUser = CacheRequest.getActiveUserLegacy(client);
 
     if (!activeUser) {
-      return Promise.reject(new NoActiveUserError('There is not an active user. Please login a user and retry the request.'));
+      return Promise.reject(
+        new NoActiveUserError('There is not an active user. Please login a user and retry the request.'
+      ));
     }
 
     return Promise.resolve({
@@ -167,6 +172,34 @@ export default class KinveyRequest extends NetworkRequest {
 
   get appVersion() {
     return this.client.appVersion;
+  }
+
+  get query() {
+    return this._query;
+  }
+
+  set query(query) {
+    if (isDefined(query) && !(query instanceof Query)) {
+      throw new KinveyError('Invalid query. It must be an instance of the Query class.');
+    }
+
+    this._query = query;
+  }
+
+  get aggregation() {
+    return this._aggregation;
+  }
+
+  set aggregation(aggregation) {
+    if (isDefined(aggregation) && !(aggregation instanceof Aggregation)) {
+      throw new KinveyError('Invalid aggregation. It must be an instance of the Aggregation class.');
+    }
+
+    if (isDefined(aggregation)) {
+      this.body = aggregation.toJSON();
+    }
+
+    this._aggregation = aggregation;
   }
 
   get headers() {
