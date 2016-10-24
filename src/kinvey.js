@@ -3,8 +3,8 @@ import { CustomEndpoint } from './endpoint';
 import Query from './query';
 import { Log } from './utils';
 import Aggregation from './aggregation';
-import DataStore, { DataStoreType, FileStore } from './datastore';
-import { Acl, Metadata, User, UserStore } from './entity';
+import DataStore, { DataStoreType, FileStore, UserStore } from './datastore';
+import { Acl, Metadata, User } from './entity';
 import { AuthorizationGrant, SocialIdentity } from './identity';
 import { AuthType, RequestMethod, KinveyRequest } from './request';
 import { KinveyError } from './errors';
@@ -96,11 +96,7 @@ class Kinvey {
     const client = Client.init(options);
 
     // Add modules that require initialization
-    this.CustomEndpoint = CustomEndpoint;
-    this.DataStore = DataStore;
     this.Files = new FileStore();
-    this.User = User;
-    this.UserStore = UserStore;
 
     // Return the client
     return client;
@@ -137,11 +133,15 @@ class Kinvey {
 Kinvey.Acl = Acl;
 Kinvey.Aggregation = Aggregation;
 Kinvey.AuthorizationGrant = AuthorizationGrant;
+Kinvey.CustomEndpoint = CustomEndpoint;
+Kinvey.DataStore = DataStore;
 Kinvey.DataStoreType = DataStoreType;
 Kinvey.Log = Log;
 Kinvey.Metadata = Metadata;
 Kinvey.Query = Query;
 Kinvey.SocialIdentity = SocialIdentity;
+Kinvey.User = User;
+Kinvey.UserStore = UserStore;
 
 // Export
 export default Kinvey;
