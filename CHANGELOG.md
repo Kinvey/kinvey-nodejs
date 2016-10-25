@@ -1,4 +1,11 @@
 ## Changelog
+## [v3.2.2](https://github.com/Kinvey/kinvey-nodejs/tree/v3.2.2) (2016-10-25)
+
+**Bug fixes:**
+
+- Import `UserStore` from the correct path.
+- Add missing group function to data stores.
+
 ## [v3.2.1](https://github.com/Kinvey/kinvey-nodejs/tree/v3.2.1) (2016-10-06)
 
 **Implemented enhancements:**
