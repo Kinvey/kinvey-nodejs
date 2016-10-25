@@ -31,6 +31,16 @@ var _kinveyresponse = require('./kinveyresponse');
 
 var _kinveyresponse2 = _interopRequireDefault(_kinveyresponse);
 
+var _query = require('../../query');
+
+var _query2 = _interopRequireDefault(_query);
+
+var _aggregation = require('../../aggregation');
+
+var _aggregation2 = _interopRequireDefault(_aggregation);
+
+var _utils = require('../../utils');
+
 var _errors = require('../../errors');
 
 var _identity = require('../../identity');
@@ -79,7 +89,6 @@ var tokenPathname = process && process.env && process.env.KINVEY_MIC_TOKEN_PATHN
 var usersNamespace = process && process.env && process.env.KINVEY_USERS_NAMESPACE || undefined || 'user';
 var defaultApiVersion = process && process.env && process.env.KINVEY_DEFAULT_API_VERSION || undefined || 4;
 var customPropertiesMaxBytesAllowed = process && process.env && process.env.KINVEY_MAX_HEADER_BYTES || undefined || 2000;
-var MAX_RETRIES = process && process.env && process.env.KINVEY_REQUEST_MAX_RETRIES || undefined || 1;
 
 var AuthType = {
   All: 'All',
@@ -252,7 +261,7 @@ var KinveyRequest = function (_NetworkRequest) {
       var _this4 = this;
 
       var rawResponse = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : false;
-      var retries = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 0;
+      var retry = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : true;
 
       return this.getAuthorizationHeader().then(function (authorizationHeader) {
         if (authorizationHeader !== undefined || authorizationHeader !== null) {
@@ -277,7 +286,7 @@ var KinveyRequest = function (_NetworkRequest) {
 
         return response;
       }).catch(function (error) {
-        if ((error instanceof _errors.InvalidCredentialsError || error instanceof _errors.InsufficientCredentialsError) && retries < MAX_RETRIES) {
+        if (error instanceof _errors.InvalidCredentialsError && retry) {
           var _ret = function () {
             var user = _cacherequest2.default.getActiveUserLegacy(_this4.client);
 
@@ -342,7 +351,7 @@ var KinveyRequest = function (_NetworkRequest) {
                     user._socialIdentity[session.identity] = (0, _defaults2.default)(user._socialIdentity[session.identity], session);
                     return _cacherequest2.default.setActiveUserLegacy(_this4.client, user);
                   }).then(function () {
-                    return _this4.execute(rawResponse, retries + 1);
+                    return _this4.execute(rawResponse, false);
                   })
                 };
               }
@@ -361,6 +370,34 @@ var KinveyRequest = function (_NetworkRequest) {
     key: 'appVersion',
     get: function get() {
       return this.client.appVersion;
+    }
+  }, {
+    key: 'query',
+    get: function get() {
+      return this._query;
+    },
+    set: function set(query) {
+      if ((0, _utils.isDefined)(query) && !(query instanceof _query2.default)) {
+        throw new _errors.KinveyError('Invalid query. It must be an instance of the Query class.');
+      }
+
+      this._query = query;
+    }
+  }, {
+    key: 'aggregation',
+    get: function get() {
+      return this._aggregation;
+    },
+    set: function set(aggregation) {
+      if ((0, _utils.isDefined)(aggregation) && !(aggregation instanceof _aggregation2.default)) {
+        throw new _errors.KinveyError('Invalid aggregation. It must be an instance of the Aggregation class.');
+      }
+
+      if ((0, _utils.isDefined)(aggregation)) {
+        this.body = aggregation.toJSON();
+      }
+
+      this._aggregation = aggregation;
     }
   }, {
     key: 'headers',

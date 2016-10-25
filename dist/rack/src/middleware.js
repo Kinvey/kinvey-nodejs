@@ -33,6 +33,11 @@ var Middleware = function () {
       return _es6Promise2.default.reject(new Error('A subclass middleware must override the handle function.'));
     }
   }, {
+    key: 'cancel',
+    value: function cancel() {
+      return _es6Promise2.default.resolve();
+    }
+  }, {
     key: 'generateTree',
     value: function generateTree() {
       var level = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : 0;

@@ -3,17 +3,24 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.SyncStore = undefined;
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
 var _cachestore = require('./cachestore');
+
+var _cachestore2 = _interopRequireDefault(_cachestore);
 
 var _request = require('../../request');
 
 var _errors = require('../../errors');
 
 var _query = require('../../query');
+
+var _query2 = _interopRequireDefault(_query);
+
+var _aggregation = require('../../aggregation');
+
+var _aggregation2 = _interopRequireDefault(_aggregation);
 
 var _utils = require('../../utils');
 
@@ -29,7 +36,7 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
-var SyncStore = exports.SyncStore = function (_CacheStore) {
+var SyncStore = function (_CacheStore) {
   _inherits(SyncStore, _CacheStore);
 
   function SyncStore() {
@@ -46,7 +53,7 @@ var SyncStore = exports.SyncStore = function (_CacheStore) {
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
       var stream = _utils.KinveyObservable.create(function (observer) {
-        if (query && !(query instanceof _query.Query)) {
+        if (query && !(query instanceof _query2.default)) {
           return observer.error(new _errors.KinveyError('Invalid query. It must be an instance of the Query class.'));
         }
 
@@ -114,24 +121,60 @@ var SyncStore = exports.SyncStore = function (_CacheStore) {
       return stream;
     }
   }, {
-    key: 'count',
-    value: function count(query) {
+    key: 'group',
+    value: function group(aggregation) {
       var _this4 = this;
 
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
       var stream = _utils.KinveyObservable.create(function (observer) {
+        if (!(aggregation instanceof _aggregation2.default)) {
+          return observer.error(new _errors.KinveyError('Invalid aggregation. It must be an instance of the Aggregation class.'));
+        }
+
+        var request = new _request.CacheRequest({
+          method: _request.RequestMethod.GET,
+          url: _url2.default.format({
+            protocol: _this4.client.protocol,
+            host: _this4.client.host,
+            pathname: _this4.pathname + '/_group'
+          }),
+          properties: options.properties,
+          aggregation: aggregation,
+          timeout: options.timeout
+        });
+
+        return request.execute().then(function (response) {
+          return response.data;
+        }).then(function (result) {
+          return observer.next(result);
+        }).then(function () {
+          return observer.complete();
+        }).catch(function (error) {
+          return observer.error(error);
+        });
+      });
+      return stream;
+    }
+  }, {
+    key: 'count',
+    value: function count(query) {
+      var _this5 = this;
+
+      var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+
+      var stream = _utils.KinveyObservable.create(function (observer) {
         try {
-          if (query && !(query instanceof _query.Query)) {
+          if (query && !(query instanceof _query2.default)) {
             throw new _errors.KinveyError('Invalid query. It must be an instance of the Query class.');
           }
 
           var request = new _request.CacheRequest({
             method: _request.RequestMethod.GET,
             url: _url2.default.format({
-              protocol: _this4.client.protocol,
-              host: _this4.client.host,
-              pathname: _this4.pathname,
+              protocol: _this5.client.protocol,
+              host: _this5.client.host,
+              pathname: _this5.pathname,
               query: options.query
             }),
             properties: options.properties,
@@ -163,4 +206,6 @@ var SyncStore = exports.SyncStore = function (_CacheStore) {
   }]);
 
   return SyncStore;
-}(_cachestore.CacheStore);
+}(_cachestore2.default);
+
+exports.default = SyncStore;

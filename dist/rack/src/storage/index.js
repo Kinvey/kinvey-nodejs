@@ -32,8 +32,6 @@ function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { de
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
-var idAttribute = process && process.env && process.env.KINVEY_ID_ATTRIBUTE || undefined || '_id';
-var kmdAttribute = process && process.env && process.env.KINVEY_KMD_ATTRIBUTE || undefined || '_kmd';
 _promiseQueue2.default.configure(_es6Promise2.default);
 var queue = new _promiseQueue2.default(1, Infinity);
 
@@ -115,16 +113,16 @@ var Storage = function () {
         }
 
         entities = entities.map(function (entity) {
-          var id = entity[idAttribute];
-          var kmd = entity[kmdAttribute] || {};
+          var id = entity._id;
+          var kmd = entity._kmd || {};
 
           if (!id) {
             id = _this.generateObjectId();
             kmd.local = true;
           }
 
-          entity[idAttribute] = id;
-          entity[kmdAttribute] = kmd;
+          entity._id = id;
+          entity._kmd = kmd;
           return entity;
         });
 
@@ -145,7 +143,11 @@ var Storage = function () {
       var entities = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : [];
 
       return _es6Promise2.default.all(entities.map(function (entity) {
-        return _this2.removeById(collection, entity[idAttribute]);
+        if (typeof entity._id === 'undefined') {
+          return _es6Promise2.default.reject('Unable to remove an entity because it does not have _id.');
+        }
+
+        return _this2.removeById(collection, entity._id);
       })).then(function (responses) {
         return responses.reduce(function (entities, entity) {
           entities.push(entity);
@@ -159,12 +161,8 @@ var Storage = function () {
       var _this3 = this;
 
       return queue.add(function () {
-        if (!id) {
-          return _es6Promise2.default.resolve(undefined);
-        }
-
         if (!(0, _isString2.default)(id)) {
-          return _es6Promise2.default.resolve(new Error('id must be a string', id));
+          return _es6Promise2.default.reject(new Error('id must be a string', id));
         }
 
         return _this3.adapter.removeById(collection, id);
@@ -186,7 +184,7 @@ var Storage = function () {
         return new _memory2.default(this.name);
       }
 
-      return null;
+      throw new Error('No storage adapter is available.');
     }
   }]);
 

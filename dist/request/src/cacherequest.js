@@ -32,6 +32,18 @@ var _localStorage = require('local-storage');
 
 var _localStorage2 = _interopRequireDefault(_localStorage);
 
+var _errors = require('../../errors');
+
+var _query = require('../../query');
+
+var _query2 = _interopRequireDefault(_query);
+
+var _aggregation = require('../../aggregation');
+
+var _aggregation2 = _interopRequireDefault(_aggregation);
+
+var _utils = require('../../utils');
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -50,6 +62,7 @@ var CacheRequest = function (_Request) {
 
     var _this = _possibleConstructorReturn(this, (CacheRequest.__proto__ || Object.getPrototypeOf(CacheRequest)).call(this, options));
 
+    _this.aggregation = options.aggregation;
     _this.query = options.query;
     _this.rack = _this.client.cacheRack;
     return _this;
@@ -73,8 +86,12 @@ var CacheRequest = function (_Request) {
           throw response.error;
         }
 
-        if (_this2.query) {
+        if ((0, _utils.isDefined)(_this2.query)) {
           response.data = _this2.query.process(response.data);
+        }
+
+        if ((0, _utils.isDefined)(_this2.aggregation)) {
+          response.data = _this2.aggregation.process(response.data);
         }
 
         return response;
@@ -89,6 +106,30 @@ var CacheRequest = function (_Request) {
       obj.entityId = this.entityId;
       obj.encryptionKey = this.client ? this.client.encryptionKey : undefined;
       return obj;
+    }
+  }, {
+    key: 'query',
+    get: function get() {
+      return this._query;
+    },
+    set: function set(query) {
+      if ((0, _utils.isDefined)(query) && !(query instanceof _query2.default)) {
+        throw new _errors.KinveyError('Invalid query. It must be an instance of the Query class.');
+      }
+
+      this._query = query;
+    }
+  }, {
+    key: 'aggregation',
+    get: function get() {
+      return this._aggregation;
+    },
+    set: function set(aggregation) {
+      if ((0, _utils.isDefined)(aggregation) && !(aggregation instanceof _aggregation2.default)) {
+        throw new _errors.KinveyError('Invalid aggregation. It must be an instance of the Aggregation class.');
+      }
+
+      this._aggregation = aggregation;
     }
   }, {
     key: 'url',

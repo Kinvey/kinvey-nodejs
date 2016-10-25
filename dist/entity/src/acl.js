@@ -3,7 +3,6 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.Acl = undefined;
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
@@ -23,7 +22,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 
 var aclAttribute = process && process.env && process.env.KINVEY_ACL_ATTRIBUTE || undefined || '_acl';
 
-var Acl = exports.Acl = function () {
+var Acl = function () {
   function Acl() {
     var entity = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
 
@@ -203,3 +202,5 @@ var Acl = exports.Acl = function () {
 
   return Acl;
 }();
+
+exports.default = Acl;

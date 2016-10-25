@@ -36,10 +36,10 @@ var SerializeMiddleware = function (_Middleware) {
   _createClass(SerializeMiddleware, [{
     key: 'handle',
     value: function handle(request) {
-      if (request && request.body) {
+      if (typeof request !== 'undefined' && typeof request.body !== 'undefined') {
         var contentType = request.headers['content-type'] || request.headers['Content-Type'];
 
-        if (contentType) {
+        if (typeof contentType !== 'undefined') {
           if (contentType.indexOf('application/json') === 0) {
             request.body = JSON.stringify(request.body);
           } else if (contentType.indexOf('application/x-www-form-urlencoded') === 0) {

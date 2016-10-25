@@ -30,6 +30,8 @@ var _errors = require('../../errors');
 
 var _query3 = require('../../query');
 
+var _query4 = _interopRequireDefault(_query3);
+
 var _es6Promise = require('es6-promise');
 
 var _es6Promise2 = _interopRequireDefault(_es6Promise);
@@ -106,7 +108,7 @@ var DeltaFetchRequest = function (_KinveyRequest) {
         if ((0, _isArray2.default)(cacheData) && cacheData.length > 0) {
           var _ret = function () {
             var cacheDocuments = (0, _keyBy2.default)(cacheData, '_id');
-            var query = new _query3.Query((0, _result2.default)(_this2.query, 'toJSON', _this2.query));
+            var query = new _query4.default((0, _result2.default)(_this2.query, 'toJSON', _this2.query));
             query.fields = ['_id', '_kmd.lmt'];
             var request = new _kinveyrequest2.default({
               method: _request2.RequestMethod.GET,
@@ -151,7 +153,7 @@ var DeltaFetchRequest = function (_KinveyRequest) {
                 var i = 0;
 
                 while (i < deltaSetIds.length) {
-                  var _query = new _query3.Query((0, _result2.default)(_this2.query, 'toJSON', _this2.query));
+                  var _query = new _query4.default((0, _result2.default)(_this2.query, 'toJSON', _this2.query));
                   var ids = deltaSetIds.slice(i, deltaSetIds.length > maxIdsPerRequest + i ? maxIdsPerRequest : deltaSetIds.length);
                   _query.contains('_id', ids);
 
@@ -194,7 +196,7 @@ var DeltaFetchRequest = function (_KinveyRequest) {
                 response.data = response.data.concat((0, _values2.default)(cacheDocuments));
 
                 if (_this2.query) {
-                  var _query2 = new _query3.Query((0, _result2.default)(_this2.query, 'toJSON', _this2.query));
+                  var _query2 = new _query4.default((0, _result2.default)(_this2.query, 'toJSON', _this2.query));
                   _query2.skip(0).limit(0);
                   response.data = _query2.process(response.data);
                 }

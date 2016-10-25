@@ -3,7 +3,7 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.SyncManager = exports.SyncOperation = undefined;
+exports.SyncOperation = undefined;
 
 var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
 
@@ -16,6 +16,8 @@ var _errors = require('../../errors');
 var _client = require('../../client');
 
 var _query = require('../../query');
+
+var _query2 = _interopRequireDefault(_query);
 
 var _es6Promise = require('es6-promise');
 
@@ -47,7 +49,6 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 
 var appdataNamespace = process && process.env && process.env.KINVEY_DATASTORE_NAMESPACE || undefined || 'appdata';
 var syncCollectionName = process && process.env && process.env.KINVEY_SYNC_COLLECTION_NAME || undefined || 'kinvey_sync';
-var idAttribute = process && process.env && process.env.KINVEY_ID_ATTRIBUTE || undefined || '_id';
 
 var SyncOperation = {
   Create: _request5.RequestMethod.POST,
@@ -57,7 +58,7 @@ var SyncOperation = {
 Object.freeze(SyncOperation);
 exports.SyncOperation = SyncOperation;
 
-var SyncManager = exports.SyncManager = function () {
+var SyncManager = function () {
   function SyncManager(collection) {
     var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
@@ -79,11 +80,11 @@ var SyncManager = exports.SyncManager = function () {
   _createClass(SyncManager, [{
     key: 'find',
     value: function find() {
-      var query = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : new _query.Query();
+      var query = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : new _query2.default();
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
-      if (!(query instanceof _query.Query)) {
-        query = new _query.Query((0, _result2.default)(query, 'toJSON', query));
+      if (!(query instanceof _query2.default)) {
+        query = new _query2.default((0, _result2.default)(query, 'toJSON', query));
       }
 
       query.equalTo('collection', this.collection);
@@ -107,7 +108,7 @@ var SyncManager = exports.SyncManager = function () {
   }, {
     key: 'count',
     value: function count() {
-      var query = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : new _query.Query();
+      var query = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : new _query2.default();
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
       return this.find(query, options).then(function (entities) {
@@ -157,12 +158,12 @@ var SyncManager = exports.SyncManager = function () {
           return _es6Promise2.default.resolve(null);
         }
 
-        var id = entity[idAttribute];
+        var id = entity._id;
         if (!id) {
           return _es6Promise2.default.reject(new _errors.SyncError('An entity is missing an _id. All entities must have an _id in order to be ' + 'added to the sync table.', entity));
         }
 
-        var query = new _query.Query().equalTo('entityId', id);
+        var query = new _query2.default().equalTo('entityId', id);
         var findRequest = new _request5.CacheRequest({
           method: _request5.RequestMethod.GET,
           url: _url2.default.format({
@@ -210,7 +211,7 @@ var SyncManager = exports.SyncManager = function () {
 
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
-      if (query && !(query instanceof _query.Query)) {
+      if (query && !(query instanceof _query2.default)) {
         return _es6Promise2.default.reject(new _errors.SyncError('Invalid query. It must be an instance of the Query class.'));
       }
 
@@ -295,7 +296,7 @@ var SyncManager = exports.SyncManager = function () {
                         url: _url2.default.format({
                           protocol: _this3.client.protocol,
                           host: _this3.client.host,
-                          pathname: _this3.pathname + '/' + syncEntity[idAttribute]
+                          pathname: _this3.pathname + '/' + syncEntity._id
                         }),
                         properties: options.properties,
                         timeout: options.timeout
@@ -339,7 +340,7 @@ var SyncManager = exports.SyncManager = function () {
                             url: _url2.default.format({
                               protocol: _this3.client.protocol,
                               host: _this3.client.host,
-                              pathname: _this3.pathname + '/' + syncEntity[idAttribute]
+                              pathname: _this3.pathname + '/' + syncEntity._id
                             }),
                             properties: options.properties,
                             timeout: options.timeout
@@ -387,7 +388,7 @@ var SyncManager = exports.SyncManager = function () {
                       });
 
                       if (method === _request5.RequestMethod.POST) {
-                        delete entity[idAttribute];
+                        delete entity._id;
                         request.method = _request5.RequestMethod.POST;
                         request.url = _url2.default.format({
                           protocol: _this3.client.protocol,
@@ -405,7 +406,7 @@ var SyncManager = exports.SyncManager = function () {
                           url: _url2.default.format({
                             protocol: _this3.client.protocol,
                             host: _this3.client.host,
-                            pathname: _this3.pathname + '/' + syncEntity[idAttribute]
+                            pathname: _this3.pathname + '/' + syncEntity._id
                           }),
                           properties: options.properties,
                           timeout: options.timeout
@@ -416,7 +417,7 @@ var SyncManager = exports.SyncManager = function () {
                             url: _url2.default.format({
                               protocol: _this3.client.protocol,
                               host: _this3.client.host,
-                              pathname: _this3.backendPathname + '/' + entity[idAttribute]
+                              pathname: _this3.backendPathname + '/' + entity._id
                             }),
                             properties: options.properties,
                             timeout: options.timeout,
@@ -486,7 +487,7 @@ var SyncManager = exports.SyncManager = function () {
                               url: _url2.default.format({
                                 protocol: _this3.client.protocol,
                                 host: _this3.client.host,
-                                pathname: _this3.pathname + '/' + syncEntity[idAttribute]
+                                pathname: _this3.pathname + '/' + syncEntity._id
                               }),
                               properties: options.properties,
                               timeout: options.timeout
@@ -568,11 +569,11 @@ var SyncManager = exports.SyncManager = function () {
     value: function clear() {
       var _this5 = this;
 
-      var query = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : new _query.Query();
+      var query = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : new _query2.default();
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
-      if (!(query instanceof _query.Query)) {
-        query = new _query.Query(query);
+      if (!(query instanceof _query2.default)) {
+        query = new _query2.default(query);
       }
       query.equalTo('collection', this.collection);
 
@@ -620,3 +621,5 @@ var SyncManager = exports.SyncManager = function () {
 
   return SyncManager;
 }();
+
+exports.default = SyncManager;

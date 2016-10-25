@@ -3,7 +3,7 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.DataStore = exports.DataStoreType = undefined;
+exports.DataStoreType = undefined;
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
@@ -15,9 +15,15 @@ var _client = require('../../client');
 
 var _networkstore = require('./networkstore');
 
+var _networkstore2 = _interopRequireDefault(_networkstore);
+
 var _cachestore = require('./cachestore');
 
+var _cachestore2 = _interopRequireDefault(_cachestore);
+
 var _syncstore = require('./syncstore');
+
+var _syncstore2 = _interopRequireDefault(_syncstore);
 
 var _url = require('url');
 
@@ -58,14 +64,14 @@ var DataStore = function () {
 
       switch (type) {
         case DataStoreType.Network:
-          store = new _networkstore.NetworkStore(_collection, options);
+          store = new _networkstore2.default(_collection, options);
           break;
         case DataStoreType.Sync:
-          store = new _syncstore.SyncStore(_collection, options);
+          store = new _syncstore2.default(_collection, options);
           break;
         case DataStoreType.Cache:
         default:
-          store = new _cachestore.CacheStore(_collection, options);
+          store = new _cachestore2.default(_collection, options);
 
       }
 
@@ -103,4 +109,4 @@ var DataStore = function () {
   return DataStore;
 }();
 
-exports.DataStore = DataStore;
+exports.default = DataStore;

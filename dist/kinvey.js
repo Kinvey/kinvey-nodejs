@@ -12,11 +12,17 @@ var _endpoint = require('./endpoint');
 
 var _query = require('./query');
 
+var _query2 = _interopRequireDefault(_query);
+
 var _utils = require('./utils');
 
 var _aggregation = require('./aggregation');
 
+var _aggregation2 = _interopRequireDefault(_aggregation);
+
 var _datastore = require('./datastore');
+
+var _datastore2 = _interopRequireDefault(_datastore);
 
 var _entity = require('./entity');
 
@@ -54,11 +60,7 @@ var Kinvey = function () {
 
       var client = _client.Client.init(options);
 
-      this.CustomEndpoint = _endpoint.CustomEndpoint;
-      this.DataStore = _datastore.DataStore;
       this.Files = new _datastore.FileStore();
-      this.User = _entity.User;
-      this.UserStore = _entity.UserStore;
 
       return client;
     }
@@ -100,12 +102,16 @@ var Kinvey = function () {
 }();
 
 Kinvey.Acl = _entity.Acl;
-Kinvey.Aggregation = _aggregation.Aggregation;
+Kinvey.Aggregation = _aggregation2.default;
 Kinvey.AuthorizationGrant = _identity.AuthorizationGrant;
+Kinvey.CustomEndpoint = _endpoint.CustomEndpoint;
+Kinvey.DataStore = _datastore2.default;
 Kinvey.DataStoreType = _datastore.DataStoreType;
 Kinvey.Log = _utils.Log;
 Kinvey.Metadata = _entity.Metadata;
-Kinvey.Query = _query.Query;
+Kinvey.Query = _query2.default;
 Kinvey.SocialIdentity = _identity.SocialIdentity;
+Kinvey.User = _entity.User;
+Kinvey.UserStore = _datastore.UserStore;
 
 exports.default = Kinvey;

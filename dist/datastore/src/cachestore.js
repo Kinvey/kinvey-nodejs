@@ -3,7 +3,6 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.CacheStore = undefined;
 
 var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
 
@@ -13,13 +12,23 @@ var _get = function get(object, property, receiver) { if (object === null) objec
 
 var _networkstore = require('./networkstore');
 
+var _networkstore2 = _interopRequireDefault(_networkstore);
+
 var _request = require('../../request');
 
 var _errors = require('../../errors');
 
 var _query3 = require('../../query');
 
+var _query4 = _interopRequireDefault(_query3);
+
+var _aggregation = require('../../aggregation');
+
+var _aggregation2 = _interopRequireDefault(_aggregation);
+
 var _sync = require('./sync');
+
+var _sync2 = _interopRequireDefault(_sync);
 
 var _entity = require('../../entity');
 
@@ -65,9 +74,7 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
-var idAttribute = process && process.env && process.env.KINVEY_ID_ATTRIBUTE || undefined || '_id';
-
-var CacheStore = exports.CacheStore = function (_NetworkStore) {
+var CacheStore = function (_NetworkStore) {
   _inherits(CacheStore, _NetworkStore);
 
   function CacheStore(collection) {
@@ -79,7 +86,7 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
 
     _this.ttl = options.ttl || undefined;
 
-    _this.syncManager = new _sync.SyncManager(_this.collection, options);
+    _this.syncManager = new _sync2.default(_this.collection, options);
     return _this;
   }
 
@@ -93,7 +100,7 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
       options = (0, _assign2.default)({ syncAutomatically: this.syncAutomatically }, options);
       var syncAutomatically = options.syncAutomatically === true;
       var stream = _utils.KinveyObservable.create(function (observer) {
-        if (query && !(query instanceof _query3.Query)) {
+        if (query && !(query instanceof _query4.default)) {
           return observer.error(new _errors.KinveyError('Invalid query. It must be an instance of the Query class.'));
         }
 
@@ -135,9 +142,9 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
 
               return _get(CacheStore.prototype.__proto__ || Object.getPrototypeOf(CacheStore.prototype), 'find', _this2).call(_this2, query, options).toPromise();
             }).then(function (networkEntities) {
-              var removedEntities = (0, _differenceBy2.default)(cacheEntities, networkEntities, idAttribute);
-              var removedIds = Object.keys((0, _keyBy2.default)(removedEntities, idAttribute));
-              var removeQuery = new _query3.Query().contains(idAttribute, removedIds);
+              var removedEntities = (0, _differenceBy2.default)(cacheEntities, networkEntities, '_id');
+              var removedIds = Object.keys((0, _keyBy2.default)(removedEntities, '_id'));
+              var removeQuery = new _query4.default().contains('_id', removedIds);
               return _this2.clear(removeQuery, options).then(function () {
                 return networkEntities;
               });
@@ -252,8 +259,8 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
       return stream;
     }
   }, {
-    key: 'count',
-    value: function count(query) {
+    key: 'group',
+    value: function group(aggregation) {
       var _this4 = this;
 
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
@@ -261,8 +268,8 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
       options = (0, _assign2.default)({ syncAutomatically: this.syncAutomatically }, options);
       var syncAutomatically = options.syncAutomatically === true;
       var stream = _utils.KinveyObservable.create(function (observer) {
-        if (query && !(query instanceof _query3.Query)) {
-          return observer.error(new _errors.KinveyError('Invalid query. It must be an instance of the Query class.'));
+        if (!(aggregation instanceof _aggregation2.default)) {
+          return observer.error(new _errors.KinveyError('Invalid aggregation. It must be an instance of the Aggregation class.'));
         }
 
         var request = new _request.CacheRequest({
@@ -270,7 +277,71 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
           url: _url2.default.format({
             protocol: _this4.client.protocol,
             host: _this4.client.host,
-            pathname: _this4.pathname,
+            pathname: _this4.pathname + '/_group'
+          }),
+          properties: options.properties,
+          aggregation: aggregation,
+          timeout: options.timeout
+        });
+
+        return request.execute().then(function (response) {
+          return response.data;
+        }).catch(function () {
+          return [];
+        }).then(function () {
+          var cacheResult = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : [];
+
+          observer.next(cacheResult);
+
+          if (syncAutomatically === true) {
+            return _this4.pendingSyncCount(null, options).then(function (syncCount) {
+              if (syncCount > 0) {
+                return _this4.push(null, options).then(function () {
+                  return _this4.pendingSyncCount(null, options);
+                });
+              }
+
+              return syncCount;
+            }).then(function (syncCount) {
+              if (syncCount > 0) {
+                throw new _errors.KinveyError('Unable to load data from the network.' + (' There are ' + syncCount + ' entities that need') + ' to be synced before data is loaded from the network.');
+              }
+
+              return _get(CacheStore.prototype.__proto__ || Object.getPrototypeOf(CacheStore.prototype), 'group', _this4).call(_this4, aggregation, options).toPromise();
+            });
+          }
+
+          return cacheResult;
+        }).then(function (result) {
+          return observer.next(result);
+        }).then(function () {
+          return observer.complete();
+        }).catch(function (error) {
+          return observer.error(error);
+        });
+      });
+      return stream;
+    }
+  }, {
+    key: 'count',
+    value: function count(query) {
+      var _this5 = this;
+
+      var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
+
+      options = (0, _assign2.default)({ syncAutomatically: this.syncAutomatically }, options);
+      var syncAutomatically = options.syncAutomatically === true;
+      var stream = _utils.KinveyObservable.create(function (observer) {
+        if (query && !(query instanceof _query4.default)) {
+          return observer.error(new _errors.KinveyError('Invalid query. It must be an instance of the Query class.'));
+        }
+
+        var request = new _request.CacheRequest({
+          method: _request.RequestMethod.GET,
+          url: _url2.default.format({
+            protocol: _this5.client.protocol,
+            host: _this5.client.host,
+            pathname: _this5.pathname,
             query: options.query
           }),
           properties: options.properties,
@@ -289,10 +360,10 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
           observer.next(cacheCount);
 
           if (syncAutomatically === true) {
-            return _this4.pendingSyncCount(null, options).then(function (syncCount) {
+            return _this5.pendingSyncCount(null, options).then(function (syncCount) {
               if (syncCount > 0) {
-                return _this4.push(null, options).then(function () {
-                  return _this4.pendingSyncCount(null, options);
+                return _this5.push(null, options).then(function () {
+                  return _this5.pendingSyncCount(null, options);
                 });
               }
 
@@ -302,7 +373,7 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
                 throw new _errors.KinveyError('Unable to load data from the network.' + (' There are ' + syncCount + ' entities that need') + ' to be synced before data is loaded from the network.');
               }
             }).then(function () {
-              return _get(CacheStore.prototype.__proto__ || Object.getPrototypeOf(CacheStore.prototype), 'count', _this4).call(_this4, query, options).toPromise();
+              return _get(CacheStore.prototype.__proto__ || Object.getPrototypeOf(CacheStore.prototype), 'count', _this5).call(_this5, query, options).toPromise();
             });
           }
 
@@ -321,7 +392,7 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
   }, {
     key: 'create',
     value: function create(data) {
-      var _this5 = this;
+      var _this6 = this;
 
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
@@ -341,9 +412,9 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
         var request = new _request.CacheRequest({
           method: _request.RequestMethod.POST,
           url: _url2.default.format({
-            protocol: _this5.client.protocol,
-            host: _this5.client.host,
-            pathname: _this5.pathname,
+            protocol: _this6.client.protocol,
+            host: _this6.client.host,
+            pathname: _this6.pathname,
             query: options.query
           }),
           properties: options.properties,
@@ -354,14 +425,14 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
         return request.execute().then(function (response) {
           return response.data;
         }).then(function (data) {
-          return _this5.syncManager.addCreateOperation(data, options).then(function () {
+          return _this6.syncManager.addCreateOperation(data, options).then(function () {
             return data;
           });
         }).then(function (data) {
-          if (_this5.syncAutomatically === true) {
-            var ids = Object.keys((0, _keyBy2.default)(data, idAttribute));
-            var query = new _query3.Query().contains('entityId', ids);
-            return _this5.push(query, options).then(function (results) {
+          if (_this6.syncAutomatically === true) {
+            var ids = Object.keys((0, _keyBy2.default)(data, '_id'));
+            var query = new _query4.default().contains('entityId', ids);
+            return _this6.push(query, options).then(function (results) {
               return (0, _map2.default)(results, function (result) {
                 return result.entity;
               });
@@ -383,7 +454,7 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
   }, {
     key: 'update',
     value: function update(data) {
-      var _this6 = this;
+      var _this7 = this;
 
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
@@ -403,9 +474,9 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
         var request = new _request.CacheRequest({
           method: _request.RequestMethod.PUT,
           url: _url2.default.format({
-            protocol: _this6.client.protocol,
-            host: _this6.client.host,
-            pathname: _this6.pathname,
+            protocol: _this7.client.protocol,
+            host: _this7.client.host,
+            pathname: _this7.pathname,
             query: options.query
           }),
           properties: options.properties,
@@ -416,14 +487,14 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
         return request.execute().then(function (response) {
           return response.data;
         }).then(function (data) {
-          return _this6.syncManager.addUpdateOperation(data, options).then(function () {
+          return _this7.syncManager.addUpdateOperation(data, options).then(function () {
             return data;
           });
         }).then(function (data) {
-          if (_this6.syncAutomatically === true) {
-            var ids = Object.keys((0, _keyBy2.default)(data, idAttribute));
-            var query = new _query3.Query().contains('entityId', ids);
-            return _this6.push(query, options).then(function (results) {
+          if (_this7.syncAutomatically === true) {
+            var ids = Object.keys((0, _keyBy2.default)(data, '_id'));
+            var query = new _query4.default().contains('entityId', ids);
+            return _this7.push(query, options).then(function (results) {
               return (0, _map2.default)(results, function (result) {
                 return result.entity;
               });
@@ -445,21 +516,21 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
   }, {
     key: 'remove',
     value: function remove(query) {
-      var _this7 = this;
+      var _this8 = this;
 
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
       var stream = _utils.KinveyObservable.create(function (observer) {
-        if (query && !(query instanceof _query3.Query)) {
+        if (query && !(query instanceof _query4.default)) {
           return observer.error(new _errors.KinveyError('Invalid query. It must be an instance of the Query class.'));
         }
 
         var fetchRequest = new _request.CacheRequest({
           method: _request.RequestMethod.GET,
           url: _url2.default.format({
-            protocol: _this7.client.protocol,
-            host: _this7.client.host,
-            pathname: _this7.pathname,
+            protocol: _this8.client.protocol,
+            host: _this8.client.host,
+            pathname: _this8.pathname,
             query: options.query
           }),
           properties: options.properties,
@@ -473,9 +544,9 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
           var removeRequest = new _request.CacheRequest({
             method: _request.RequestMethod.DELETE,
             url: _url2.default.format({
-              protocol: _this7.client.protocol,
-              host: _this7.client.host,
-              pathname: _this7.pathname,
+              protocol: _this8.client.protocol,
+              host: _this8.client.host,
+              pathname: _this8.pathname,
               query: options.query
             }),
             properties: options.properties,
@@ -493,13 +564,13 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
                 var metadata = new _entity.Metadata(entity);
                 return metadata.isLocal();
               });
-              var query = new _query3.Query().contains('entityId', Object.keys((0, _keyBy2.default)(localEntities, idAttribute)));
+              var query = new _query4.default().contains('entityId', Object.keys((0, _keyBy2.default)(localEntities, '_id')));
               return {
-                v: _this7.clearSync(query, options).then(function () {
+                v: _this8.clearSync(query, options).then(function () {
                   var syncEntities = (0, _xorWith2.default)(entities, localEntities, function (entity, localEntity) {
-                    return entity[idAttribute] === localEntity[idAttribute];
+                    return entity._id === localEntity._id;
                   });
-                  return _this7.syncManager.addDeleteOperation(syncEntities, options);
+                  return _this8.syncManager.addDeleteOperation(syncEntities, options);
                 }).then(function () {
                   return entities;
                 })
@@ -511,10 +582,10 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
 
           return entities;
         }).then(function (entities) {
-          if (_this7.syncAutomatically === true) {
-            var ids = Object.keys((0, _keyBy2.default)(entities, idAttribute));
-            var _query = new _query3.Query().contains('entityId', ids);
-            return _this7.push(_query, options).then(function () {
+          if (_this8.syncAutomatically === true) {
+            var ids = Object.keys((0, _keyBy2.default)(entities, '_id'));
+            var _query = new _query4.default().contains('entityId', ids);
+            return _this8.push(_query, options).then(function () {
               return entities;
             });
           }
@@ -534,7 +605,7 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
   }, {
     key: 'removeById',
     value: function removeById(id) {
-      var _this8 = this;
+      var _this9 = this;
 
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
@@ -542,9 +613,9 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
         var request = new _request.CacheRequest({
           method: _request.RequestMethod.DELETE,
           url: _url2.default.format({
-            protocol: _this8.client.protocol,
-            host: _this8.client.host,
-            pathname: _this8.pathname + '/' + id,
+            protocol: _this9.client.protocol,
+            host: _this9.client.host,
+            pathname: _this9.pathname + '/' + id,
             query: options.query
           }),
           properties: options.properties,
@@ -559,23 +630,23 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
             var metadata = new _entity.Metadata(entity);
 
             if (metadata.isLocal()) {
-              var query = new _query3.Query();
-              query.equalTo('entityId', entity[idAttribute]);
-              return _this8.clearSync(query, options).then(function () {
+              var query = new _query4.default();
+              query.equalTo('entityId', entity._id);
+              return _this9.clearSync(query, options).then(function () {
                 return entity;
               });
             }
 
-            return _this8.syncManager.addDeleteOperation(entity, options).then(function () {
+            return _this9.syncManager.addDeleteOperation(entity, options).then(function () {
               return entity;
             });
           }
 
           return entity;
         }).then(function (entity) {
-          if (_this8.syncAutomatically === true) {
-            var query = new _query3.Query().equalTo('entityId', entity[idAttribute]);
-            return _this8.push(query, options).then(function () {
+          if (_this9.syncAutomatically === true) {
+            var query = new _query4.default().equalTo('entityId', entity._id);
+            return _this9.push(query, options).then(function () {
               return entity;
             });
           }
@@ -595,21 +666,21 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
   }, {
     key: 'clear',
     value: function clear(query) {
-      var _this9 = this;
+      var _this10 = this;
 
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
       var stream = _utils.KinveyObservable.create(function (observer) {
-        if (query && !(query instanceof _query3.Query)) {
+        if (query && !(query instanceof _query4.default)) {
           return observer.error(new _errors.KinveyError('Invalid query. It must be an instance of the Query class.'));
         }
 
         var request = new _request.CacheRequest({
           method: _request.RequestMethod.GET,
           url: _url2.default.format({
-            protocol: _this9.client.protocol,
-            host: _this9.client.host,
-            pathname: _this9.pathname,
+            protocol: _this10.client.protocol,
+            host: _this10.client.host,
+            pathname: _this10.pathname,
             query: options.query
           }),
           properties: options.properties,
@@ -623,9 +694,9 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
           var request = new _request.CacheRequest({
             method: _request.RequestMethod.DELETE,
             url: _url2.default.format({
-              protocol: _this9.client.protocol,
-              host: _this9.client.host,
-              pathname: _this9.pathname,
+              protocol: _this10.client.protocol,
+              host: _this10.client.host,
+              pathname: _this10.pathname,
               query: options.query
             }),
             properties: options.properties,
@@ -638,8 +709,8 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
           });
         }).then(function (entities) {
           if (entities && entities.length > 0) {
-            var _query2 = new _query3.Query().contains('entityId', Object.keys((0, _keyBy2.default)(entities, idAttribute)));
-            return _this9.clearSync(_query2, options).then(function () {
+            var _query2 = new _query4.default().contains('entityId', Object.keys((0, _keyBy2.default)(entities, '_id')));
+            return _this10.clearSync(_query2, options).then(function () {
               return entities;
             });
           }
@@ -679,19 +750,19 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
   }, {
     key: 'pull',
     value: function pull(query) {
-      var _this10 = this;
+      var _this11 = this;
 
       var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
 
       options = (0, _assign2.default)({ useDeltaFetch: this.useDeltaFetch }, options);
       return this.syncManager.pull(query, options).then(function (entities) {
-        return _this10.clear(query, options).then(function () {
+        return _this11.clear(query, options).then(function () {
           var saveRequest = new _request.CacheRequest({
             method: _request.RequestMethod.PUT,
             url: _url2.default.format({
-              protocol: _this10.client.protocol,
-              host: _this10.client.host,
-              pathname: _this10.pathname,
+              protocol: _this11.client.protocol,
+              host: _this11.client.host,
+              pathname: _this11.pathname,
               query: options.query
             }),
             properties: options.properties,
@@ -728,4 +799,6 @@ var CacheStore = exports.CacheStore = function (_NetworkStore) {
   }]);
 
   return CacheStore;
-}(_networkstore.NetworkStore);
+}(_networkstore2.default);
+
+exports.default = CacheStore;

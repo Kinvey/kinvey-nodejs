@@ -33,13 +33,13 @@ var _es6Promise = require('es6-promise');
 
 var _es6Promise2 = _interopRequireDefault(_es6Promise);
 
-var _findIndex = require('lodash/findIndex');
-
-var _findIndex2 = _interopRequireDefault(_findIndex);
-
 var _reduce = require('lodash/reduce');
 
 var _reduce2 = _interopRequireDefault(_reduce);
+
+var _isFunction = require('lodash/isFunction');
+
+var _isFunction2 = _interopRequireDefault(_isFunction);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -61,23 +61,11 @@ var Rack = function (_Middleware) {
 
     _this.middlewares = [];
     _this.canceled = false;
+    _this.activeMiddleware = undefined;
     return _this;
   }
 
   _createClass(Rack, [{
-    key: 'getMiddleware',
-    value: function getMiddleware() {
-      var index = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : -1;
-
-      var middlewares = this.middlewares;
-
-      if (index < -1 || index >= middlewares.length) {
-        throw new Error('Index ' + index + ' is out of bounds.');
-      }
-
-      return middlewares[index];
-    }
-  }, {
     key: 'use',
     value: function use(middleware) {
       if (middleware) {
@@ -90,83 +78,6 @@ var Rack = function (_Middleware) {
       }
     }
   }, {
-    key: 'useBefore',
-    value: function useBefore(middlewareClass, middleware) {
-      if (middleware) {
-        if (middleware instanceof _middleware2.default) {
-          var middlewares = this.middlewares;
-          var index = (0, _findIndex2.default)(middlewares, function (existingMiddleware) {
-            return existingMiddleware instanceof middlewareClass;
-          });
-
-          if (index > -1) {
-            middlewares.splice(index, 0, middleware);
-            this.middlewares = middlewares;
-          }
-
-          return;
-        }
-
-        throw new Error('Unable to use the middleware. It must be an instance of Middleware.');
-      }
-    }
-  }, {
-    key: 'useAfter',
-    value: function useAfter(middlewareClass, middleware) {
-      if (middleware) {
-        if (middleware instanceof _middleware2.default) {
-          var middlewares = this.middlewares;
-          var index = (0, _findIndex2.default)(middlewares, function (existingMiddleware) {
-            return existingMiddleware instanceof middlewareClass;
-          });
-
-          if (index > -1) {
-            middlewares.splice(index + 1, 0, middleware);
-            this.middlewares = middlewares;
-          }
-
-          return;
-        }
-
-        throw new Error('Unable to use the middleware. It must be an instance of Middleware.');
-      }
-    }
-  }, {
-    key: 'swap',
-    value: function swap(middlewareClass, middleware) {
-      if (middleware) {
-        if (middleware instanceof _middleware2.default) {
-          var middlewares = this.middlewares;
-          var index = (0, _findIndex2.default)(middlewares, function (existingMiddleware) {
-            return existingMiddleware instanceof middlewareClass;
-          });
-
-          if (index > -1) {
-            middlewares.splice(index, 1, middleware);
-            this.middlewares = middlewares;
-          }
-
-          return;
-        }
-
-        throw new Error('Unable to use the middleware. It must be an instance of Middleware.');
-      }
-    }
-  }, {
-    key: 'remove',
-    value: function remove(middlewareClass) {
-      var middlewares = this.middlewares;
-      var index = (0, _findIndex2.default)(middlewares, function (existingMiddleware) {
-        return existingMiddleware instanceof middlewareClass;
-      });
-
-      if (index > -1) {
-        middlewares.splice(index, 1);
-        this.middlewares = middlewares;
-        this.remove(middlewareClass);
-      }
-    }
-  }, {
     key: 'reset',
     value: function reset() {
       this.middlewares = [];
@@ -174,7 +85,9 @@ var Rack = function (_Middleware) {
   }, {
     key: 'execute',
     value: function execute(req) {
-      if (!req) {
+      var _this2 = this;
+
+      if (typeof req === 'undefined') {
         return _es6Promise2.default.reject(new Error('Request is undefined. Please provide a valid request.'));
       }
 
@@ -182,17 +95,40 @@ var Rack = function (_Middleware) {
         return promise.then(function (_ref) {
           var request = _ref.request;
           var response = _ref.response;
+
+          if (_this2.canceled === true) {
+            return _es6Promise2.default.reject(new Error('Cancelled'));
+          }
+
+          _this2.activeMiddleware = middleware;
           return middleware.handle(request || req, response);
         });
       }, _es6Promise2.default.resolve({ request: req })).then(function (_ref2) {
         var response = _ref2.response;
+
+        if (_this2.canceled === true) {
+          return _es6Promise2.default.reject(new Error('Cancelled'));
+        }
+
+        _this2.canceled = false;
+        _this2.activeMiddleware = undefined;
         return response;
+      }).catch(function (error) {
+        _this2.canceled = false;
+        _this2.activeMiddleware = undefined;
+        throw error;
       });
     }
   }, {
     key: 'cancel',
     value: function cancel() {
       this.canceled = true;
+
+      if (typeof this.activeMiddleware !== 'undefined' && (0, _isFunction2.default)(this.activeMiddleware.cancel)) {
+        return this.activeMiddleware.cancel();
+      }
+
+      return _es6Promise2.default.resolve();
     }
   }, {
     key: 'handle',
@@ -228,10 +164,10 @@ var CacheRack = exports.CacheRack = function (_Rack) {
 
     _classCallCheck(this, CacheRack);
 
-    var _this2 = _possibleConstructorReturn(this, (CacheRack.__proto__ || Object.getPrototypeOf(CacheRack)).call(this, name));
+    var _this3 = _possibleConstructorReturn(this, (CacheRack.__proto__ || Object.getPrototypeOf(CacheRack)).call(this, name));
 
-    _this2.use(new _cache2.default());
-    return _this2;
+    _this3.use(new _cache2.default());
+    return _this3;
   }
 
   return CacheRack;
@@ -245,12 +181,12 @@ var NetworkRack = exports.NetworkRack = function (_Rack2) {
 
     _classCallCheck(this, NetworkRack);
 
-    var _this3 = _possibleConstructorReturn(this, (NetworkRack.__proto__ || Object.getPrototypeOf(NetworkRack)).call(this, name));
+    var _this4 = _possibleConstructorReturn(this, (NetworkRack.__proto__ || Object.getPrototypeOf(NetworkRack)).call(this, name));
 
-    _this3.use(new _serialize2.default());
-    _this3.use(new _http2.default());
-    _this3.use(new _parse2.default());
-    return _this3;
+    _this4.use(new _serialize2.default());
+    _this4.use(new _http2.default());
+    _this4.use(new _parse2.default());
+    return _this4;
   }
 
   return NetworkRack;

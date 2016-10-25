@@ -3,9 +3,6 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.Query = undefined;
-
-var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
@@ -52,6 +49,10 @@ var _forEach2 = _interopRequireDefault(_forEach);
 var _findKey = require('lodash/findKey');
 
 var _findKey2 = _interopRequireDefault(_findKey);
+
+var _has = require('lodash/has');
+
+var _has2 = _interopRequireDefault(_has);
 
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
@@ -187,7 +188,7 @@ var Query = function () {
         args[_key2] = arguments[_key2];
       }
 
-      if (this._parent && this._parent.filter.$and) {
+      if ((0, _utils.isDefined)(this._parent) && (0, _has2.default)(this._parent, 'filter.$and')) {
         var _parent;
 
         return (_parent = this._parent).nor.apply(_parent, args);
@@ -202,7 +203,7 @@ var Query = function () {
         args[_key3] = arguments[_key3];
       }
 
-      if (this._parent) {
+      if ((0, _utils.isDefined)(this._parent)) {
         var _parent2;
 
         return (_parent2 = this._parent).or.apply(_parent2, args);
@@ -287,7 +288,7 @@ var Query = function () {
 
       var result = this.addFilter(field, '$nearSphere', [coord[0], coord[1]]);
 
-      if (maxDistance) {
+      if ((0, _isNumber2.default)(maxDistance)) {
         this.addFilter(field, '$maxDistance', maxDistance);
       }
 
@@ -296,11 +297,11 @@ var Query = function () {
   }, {
     key: 'withinBox',
     value: function withinBox(field, bottomLeftCoord, upperRightCoord) {
-      if (!(0, _isArray2.default)(bottomLeftCoord) || !bottomLeftCoord[0] || !bottomLeftCoord[1]) {
+      if (!(0, _isArray2.default)(bottomLeftCoord) || !(0, _isNumber2.default)(bottomLeftCoord[0]) || !(0, _isNumber2.default)(bottomLeftCoord[1])) {
         throw new _errors.QueryError('bottomLeftCoord must be a [number, number]');
       }
 
-      if (!(0, _isArray2.default)(upperRightCoord) || !upperRightCoord[0] || !upperRightCoord[1]) {
+      if (!(0, _isArray2.default)(upperRightCoord) || !(0, _isNumber2.default)(upperRightCoord[0]) || !(0, _isNumber2.default)(upperRightCoord[1])) {
         throw new _errors.QueryError('upperRightCoord must be a [number, number]');
       }
 
@@ -345,7 +346,7 @@ var Query = function () {
   }, {
     key: 'ascending',
     value: function ascending(field) {
-      if (this._parent) {
+      if ((0, _utils.isDefined)(this._parent)) {
         this._parent.ascending(field);
       } else {
         this.sort[field] = 1;
@@ -356,7 +357,7 @@ var Query = function () {
   }, {
     key: 'descending',
     value: function descending(field) {
-      if (this._parent) {
+      if ((0, _utils.isDefined)(this._parent)) {
         this._parent.descending(field);
       } else {
         this.sort[field] = -1;
@@ -371,7 +372,7 @@ var Query = function () {
         this.filter[field] = {};
       }
 
-      if (condition !== undefined && condition !== null && values !== undefined && values !== null) {
+      if ((0, _utils.isDefined)(condition) && (0, _utils.isDefined)(values)) {
         this.filter[field][condition] = values;
       } else {
         this.filter[field] = condition;
@@ -418,8 +419,6 @@ var Query = function () {
   }, {
     key: 'process',
     value: function process(data) {
-      var _this3 = this;
-
       if (this.isSupportedOffline() === false) {
         (function () {
           var message = 'This query is not able to run locally. The following filters are not supported' + ' locally:';
@@ -432,65 +431,57 @@ var Query = function () {
         })();
       }
 
-      if (data) {
-        var _ret2 = function () {
-          if (!(0, _isArray2.default)(data)) {
-            throw new _errors.QueryError('data argument must be of type: Array.');
-          }
+      if (!(0, _isArray2.default)(data)) {
+        throw new _errors.QueryError('data argument must be of type: Array.');
+      }
 
-          var json = _this3.toJSON();
-          data = (0, _sift2.default)(json.filter, data);
+      var json = this.toJSON();
+      data = (0, _sift2.default)(json.filter, data);
 
-          if (json.fields && json.fields.length > 0) {
-            data = data.map(function (item) {
-              var keys = Object.keys(item);
-              (0, _forEach2.default)(keys, function (key) {
-                if (json.fields.indexOf(key) === -1) {
-                  delete item[key];
-                }
-              });
+      if ((0, _isArray2.default)(json.fields) && json.fields.length > 0) {
+        data = data.map(function (item) {
+          var keys = Object.keys(item);
+          (0, _forEach2.default)(keys, function (key) {
+            if (json.fields.indexOf(key) === -1) {
+              delete item[key];
+            }
+          });
 
-              return item;
-            });
-          }
+          return item;
+        });
 
-          data = data.sort(function (a, b) {
-            var fields = Object.keys(json.sort);
-            (0, _forEach2.default)(fields, function (field) {
-              var aField = (0, _utils.nested)(a, field);
-              var bField = (0, _utils.nested)(b, field);
+        data = data.sort(function (a, b) {
+          var fields = Object.keys(json.sort);
+          (0, _forEach2.default)(fields, function (field) {
+            var aField = (0, _utils.nested)(a, field);
+            var bField = (0, _utils.nested)(b, field);
 
-              if (aField && !bField) {
-                return -1;
-              }
+            if ((0, _utils.isDefined)(aField) && !(0, _utils.isDefined)(bField)) {
+              return -1;
+            }
 
-              if (bField && !aField) {
-                return 1;
-              }
+            if ((0, _utils.isDefined)(bField) && !(0, _utils.isDefined)(aField)) {
+              return 1;
+            }
 
-              if (aField !== bField) {
-                var modifier = json.sort[field];
-                return (aField < bField ? -1 : 1) * modifier;
-              }
-
-              return 0;
-            });
+            if (aField !== bField) {
+              var modifier = json.sort[field];
+              return (aField < bField ? -1 : 1) * modifier;
+            }
 
             return 0;
           });
 
-          if (json.limit) {
-            return {
-              v: data.slice(json.skip, json.skip + json.limit)
-            };
+          return 0;
+        });
+
+        if ((0, _isNumber2.default)(json.skip)) {
+          if ((0, _isNumber2.default)(json.limit)) {
+            return data.slice(json.skip, json.skip + json.limit);
           }
 
-          return {
-            v: data.slice(json.skip)
-          };
-        }();
-
-        if ((typeof _ret2 === 'undefined' ? 'undefined' : _typeof(_ret2)) === "object") return _ret2.v;
+          return data.slice(json.skip);
+        }
       }
 
       return data;
@@ -498,7 +489,7 @@ var Query = function () {
   }, {
     key: 'toPlainObject',
     value: function toPlainObject() {
-      if (this._parent) {
+      if ((0, _utils.isDefined)(this._parent)) {
         return this._parent.toPlainObject();
       }
 
@@ -530,11 +521,11 @@ var Query = function () {
         queryString.fields = this.fields.join(',');
       }
 
-      if (this.limit) {
+      if ((0, _isNumber2.default)(this.limit)) {
         queryString.limit = this.limit;
       }
 
-      if (this.skip > 0) {
+      if ((0, _isNumber2.default)(this.skip) && this.skip > 0) {
         queryString.skip = this.skip;
       }
 
@@ -566,7 +557,7 @@ var Query = function () {
         throw new _errors.QueryError('fields must be an Array');
       }
 
-      if (this._parent) {
+      if ((0, _utils.isDefined)(this._parent)) {
         this._parent.fields = fields;
       } else {
         this._fields = fields;
@@ -590,7 +581,7 @@ var Query = function () {
         throw new _errors.QueryError('sort must an Object');
       }
 
-      if (this._parent) {
+      if ((0, _utils.isDefined)(this._parent)) {
         this._parent.sort(sort);
       } else {
         this._sort = sort || {};
@@ -606,7 +597,7 @@ var Query = function () {
         limit = parseFloat(limit);
       }
 
-      if (limit && !(0, _isNumber2.default)(limit)) {
+      if ((0, _utils.isDefined)(limit) && !(0, _isNumber2.default)(limit)) {
         throw new _errors.QueryError('limit must be a number');
       }
 
@@ -632,7 +623,7 @@ var Query = function () {
         throw new _errors.QueryError('skip must be a number');
       }
 
-      if (this._parent) {
+      if ((0, _utils.isDefined)(this._parent)) {
         this._parent.skip(skip);
       } else {
         this._skip = skip;
@@ -643,4 +634,4 @@ var Query = function () {
   return Query;
 }();
 
-exports.Query = Query;
+exports.default = Query;

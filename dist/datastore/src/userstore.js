@@ -3,7 +3,6 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.UserStore = undefined;
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
@@ -14,6 +13,8 @@ var _request = require('../../request');
 var _errors = require('../../errors');
 
 var _networkstore = require('./networkstore');
+
+var _networkstore2 = _interopRequireDefault(_networkstore);
 
 var _es6Promise = require('es6-promise');
 
@@ -37,9 +38,8 @@ function _inherits(subClass, superClass) { if (typeof superClass !== "function" 
 
 var usersNamespace = process && process.env && process.env.KINVEY_USERS_NAMESPACE || undefined || 'user';
 var rpcNamespace = process && process.env && process.env.KINVEY_RPC_NAMESPACE || undefined || 'rpc';
-var idAttribute = process && process.env && process.env.KINVEY_ID_ATTRIBUTE || undefined || '_id';
 
-var UserStore = exports.UserStore = function (_NetworkStore) {
+var UserStore = function (_NetworkStore) {
   _inherits(UserStore, _NetworkStore);
 
   function UserStore(options) {
@@ -66,7 +66,7 @@ var UserStore = exports.UserStore = function (_NetworkStore) {
         return _es6Promise2.default.reject(new _errors.KinveyError('Only one user can be updated at one time.', data));
       }
 
-      if (!data[idAttribute]) {
+      if (!data._id) {
         return _es6Promise2.default.ject(new _errors.KinveyError('User must have an _id.'));
       }
 
@@ -126,4 +126,6 @@ var UserStore = exports.UserStore = function (_NetworkStore) {
   }]);
 
   return UserStore;
-}(_networkstore.NetworkStore);
+}(_networkstore2.default);
+
+exports.default = UserStore;

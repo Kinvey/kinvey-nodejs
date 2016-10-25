@@ -3,7 +3,6 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.FileStore = undefined;
 
 var _typeof = typeof Symbol === "function" && typeof Symbol.iterator === "symbol" ? function (obj) { return typeof obj; } : function (obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; };
 
@@ -16,6 +15,8 @@ var _request = require('../../request');
 var _errors = require('../../errors');
 
 var _networkstore = require('./networkstore');
+
+var _networkstore2 = _interopRequireDefault(_networkstore);
 
 var _utils = require('../../utils');
 
@@ -51,7 +52,6 @@ function _possibleConstructorReturn(self, call) { if (!self) { throw new Referen
 
 function _inherits(subClass, superClass) { if (typeof superClass !== "function" && superClass !== null) { throw new TypeError("Super expression must either be null or a function, not " + typeof superClass); } subClass.prototype = Object.create(superClass && superClass.prototype, { constructor: { value: subClass, enumerable: false, writable: true, configurable: true } }); if (superClass) Object.setPrototypeOf ? Object.setPrototypeOf(subClass, superClass) : subClass.__proto__ = superClass; }
 
-var idAttribute = process && process.env && process.env.KINVEY_ID_ATTRIBUTE || undefined || '_id';
 var filesNamespace = process && process.env && process.env.KINVEY_FILES_NAMESPACE || undefined || 'blob';
 var MAX_BACKOFF = process && process.env && process.env.KINVEY_MAX_BACKOFF || undefined || 32 * 1000;
 
@@ -64,7 +64,7 @@ function getStartIndex(rangeHeader, max) {
   return start >= max ? max - 1 : start;
 }
 
-var FileStore = exports.FileStore = function (_NetworkStore) {
+var FileStore = function (_NetworkStore) {
   _inherits(FileStore, _NetworkStore);
 
   function FileStore() {
@@ -181,7 +181,7 @@ var FileStore = exports.FileStore = function (_NetworkStore) {
       });
       request.headers.set('X-Kinvey-Content-Type', metadata.mimeType);
 
-      if (metadata[idAttribute]) {
+      if (metadata._id) {
         request.method = _request.RequestMethod.PUT;
         request.url = _url2.default.format({
           protocol: this.client.protocol,
@@ -323,4 +323,6 @@ var FileStore = exports.FileStore = function (_NetworkStore) {
   }]);
 
   return FileStore;
-}(_networkstore.NetworkStore);
+}(_networkstore2.default);
+
+exports.default = FileStore;

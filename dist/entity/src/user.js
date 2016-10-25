@@ -3,7 +3,6 @@
 Object.defineProperty(exports, "__esModule", {
   value: true
 });
-exports.User = undefined;
 
 var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
 
@@ -11,13 +10,19 @@ var _client = require('../../client');
 
 var _acl = require('./acl');
 
+var _acl2 = _interopRequireDefault(_acl);
+
 var _metadata = require('./metadata');
+
+var _metadata2 = _interopRequireDefault(_metadata);
 
 var _request = require('../../request');
 
 var _errors = require('../../errors');
 
 var _datastore = require('../../datastore');
+
+var _datastore2 = _interopRequireDefault(_datastore);
 
 var _identity = require('../../identity');
 
@@ -63,7 +68,7 @@ var socialIdentityAttribute = process && process.env && process.env.KINVEY_SOCIA
 var usernameAttribute = process && process.env && process.env.KINVEY_USERNAME_ATTRIBUTE || undefined || 'username';
 var emailAttribute = process && process.env && process.env.KINVEY_EMAIL_ATTRIBUTE || undefined || 'email';
 
-var User = exports.User = function () {
+var User = function () {
   function User() {
     var data = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
     var options = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : {};
@@ -320,7 +325,7 @@ var User = exports.User = function () {
       }).then(function () {
         return _request.CacheRequest.setActiveUserLegacy(_this8.client, null);
       }).then(function () {
-        return _datastore.DataStore.clearCache({ client: _this8.client });
+        return _datastore2.default.clearCache({ client: _this8.client });
       }).catch(function (error) {
         _utils.Log.error(error);
       }).then(function () {
@@ -450,12 +455,12 @@ var User = exports.User = function () {
   }, {
     key: '_acl',
     get: function get() {
-      return new _acl.Acl(this.data);
+      return new _acl2.default(this.data);
     }
   }, {
     key: 'metadata',
     get: function get() {
-      return new _metadata.Metadata(this.data);
+      return new _metadata2.default(this.data);
     },
     set: function set(metadata) {
       this.data[kmdAttribute] = (0, _result2.default)(metadata, 'toPlainObjecta', metadata);
@@ -703,3 +708,5 @@ var User = exports.User = function () {
 
   return User;
 }();
+
+exports.default = User;
