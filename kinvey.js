@@ -1,5 +1,5 @@
 /*!
- * Copyright (c) 2016 Kinvey, Inc.
+ * Copyright (c) 2017 Kinvey, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -154,7 +154,7 @@
      * @type {string}
      * @default
      */
-    Kinvey.SDK_VERSION = '1.6.6';
+    Kinvey.SDK_VERSION = '1.7.0';
 
     // Properties.
     // -----------
@@ -215,6 +215,19 @@
       // active user from disk.
       var promise = Storage.get('activeUser');
       return promise.then(function(user) {
+        if(null == user) {
+          return Storage._get(Kinvey.appKey + 'kinvey_user')
+            .then(function(user) {
+              if(null != user) {
+                return [user._id, user._kmd.authtoken];
+              }
+
+              return user;
+            });
+        }
+
+        return user;
+      }).then(function(user) {
         // If there is no active user, set to `null`.
         if(null == user) {
           return Kinvey.setActiveUser(null);
@@ -316,9 +329,11 @@
       // Update disk state in the background.
       if(null != user) { // Save the active user.
         Storage.save('activeUser', [user._id, user._kmd.authtoken]);
+        Storage._save(Kinvey.appKey + 'kinvey_user', user); // Share authentication info with v3.x
       }
       else { // Delete the active user.
         Storage.destroy('activeUser');
+        Storage._destroy(Kinvey.appKey + 'kinvey_user');
       }
 
       // Return the previous active user.
@@ -413,7 +428,7 @@
         // Initialize the synchronization namespace and restore the active user.
         return Kinvey.Sync.init(options.sync);
       }).then(function() {
-        logger.debug('Kinvey initialized, running version: js-nodejs/1.6.6');
+        logger.debug('Kinvey initialized, running version: js-nodejs/1.7.0');
         return restoreActiveUser(options);
       });
 
@@ -1777,7 +1792,7 @@
       }
 
       // Return the device information string.
-      var parts = ['js-nodejs/1.6.6'];
+      var parts = ['js-nodejs/1.7.0'];
       if(0 !== libraries.length) { // Add external library information.
         parts.push('(' + libraries.sort().join(', ') + ')');
       }
@@ -3765,14 +3780,14 @@
         }
         else {
           usernameOrData = {
-            username: usernameOrData,
-            password: password
+            username: String(usernameOrData),
+            password: String(password)
           };
         }
         options = options || {};
 
         // Validate arguments.
-        if((null == usernameOrData.username || null == usernameOrData.password) && null == usernameOrData._socialIdentity) {
+        if((null == usernameOrData.username || '' === usernameOrData.username.trim() || null == usernameOrData.password || '' === usernameOrData.password.trim()) && null == usernameOrData._socialIdentity) {
           error = new Kinvey.Error('Username and/or password missing. Please provide both a username and password to login.');
           return wrapCallbacks(Kinvey.Defer.reject(error), options);
         }
@@ -4914,7 +4929,7 @@
           popup = Titanium.UI.createWindow({
             backgroundColor: 'white',
             barColor: '#000',
-            title: 'Kinvey - MIC',
+            title: options.popupTitle || 'Kinvey - MIC',
             modal: true
           });
 
@@ -4926,7 +4941,7 @@
             var win = Titanium.UI.createWindow({
               backgroundColor: 'white',
               barColor: '#e3e3e3',
-              title: 'Kinvey - MIC'
+              title: options.popupTitle || 'Kinvey - MIC'
             });
 
             // Add the web view to the window
@@ -5081,11 +5096,6 @@
           catch(e) {}
 
           return response.code;
-        }, function(error) {
-          error = clientError(Kinvey.Error.MIC_ERROR, {
-            debug: 'Unable to authorize user with username ' + options.username + '.'
-          });
-          throw error;
         });
       },
 
@@ -8841,7 +8851,7 @@
             var status = response.statusCode;
 
             // Check `Content-Type` header for application/json
-            if(!options.file && '' !== responseData.toString() && 2 === parseInt(status / 100, 10) && 204 !== status) {
+            if(!options.file && url.indexOf('https://storage.googleapis.com') !== 0 && '' !== responseData.toString() && 2 === parseInt(status / 100, 10) && 204 !== status) {
               var responseContentType = response.headers['content-type'];
               var error;
 
